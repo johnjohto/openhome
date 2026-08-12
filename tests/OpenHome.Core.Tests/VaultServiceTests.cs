@@ -44,6 +44,8 @@ public class VaultServiceTests : IDisposable
         var pk = sav.BlankPKM;
         pk.Species = species;
         pk.Nickname = nickname;
+        // BlankPKM has Language 0 (JP) — set it, or the gen <=5 -> PK8 upgrade at deposit re-derives a JP nickname.
+        pk.Language = (int)LanguageID.English;
         sav.SetBoxSlotAtIndex(pk, box, slot);
         sav.State.Edited = true;
         await File.WriteAllBytesAsync(path, sav.Write().ToArray());

@@ -68,7 +68,7 @@ public sealed class VaultService(
         if (pk.Species == 0)
             throw new InvalidOperationException($"Box {box} slot {slot} is empty — nothing to deposit.");
 
-        var pkh = PKH.ConvertFromPKM(pk);
+        var pkh = PKH.ConvertFromPKM(ToHomeCompatible(pk));
         pkh.Tracker = await NewHomeTrackerAsync(ct);
         var data = pkh.Rebuild();
 
@@ -97,6 +97,63 @@ public sealed class VaultService(
         db.StoredPokemon.Add(stored);
         await db.SaveChangesAsync(ct);
         return ToSummary(stored, targetBox.Name);
+    }
+
+    /// <summary>Lists every stored Pokémon with its denormalized metadata, ordered by box order then slot.</summary>
+    public async Task<IReadOnlyList<StoredPokemonSummary>> ListStoredPokemonAsync(CancellationToken ct = default)
+    {
+        var stored = await db.StoredPokemon
+            .Include(p => p.VaultBox)
+            .OrderBy(p => p.VaultBox!.Order)
+            .ThenBy(p => p.Slot)
+            .ToListAsync(ct);
+        return stored.Select(p => ToSummary(p, p.VaultBox?.Name ?? "")).ToList();
+    }
+
+    /// <summary>
+    /// Reads one stored Pokémon in full: denormalized metadata plus IVs, EVs and moves
+    /// deserialized from the stored PKH bytes (<c>PKH.Rebuild()</c> round-trips).
+    /// </summary>
+    public async Task<StoredPokemonDetail> GetStoredPokemonAsync(Guid storedPokemonId, CancellationToken ct = default)
+    {
+        var stored = await db.StoredPokemon.Include(p => p.VaultBox).FirstOrDefaultAsync(p => p.Id == storedPokemonId, ct)
+            ?? throw new KeyNotFoundException($"No stored Pokémon with id {storedPokemonId}.");
+
+        var pkh = new PKH(stored.Data);
+        var ivs = new StatSet(pkh.IV_HP, pkh.IV_ATK, pkh.IV_DEF, pkh.IV_SPA, pkh.IV_SPD, pkh.IV_SPE);
+        var evs = new StatSet(pkh.EV_HP, pkh.EV_ATK, pkh.EV_DEF, pkh.EV_SPA, pkh.EV_SPD, pkh.EV_SPE);
+        var moves = new[] { pkh.Move1, pkh.Move2, pkh.Move3, pkh.Move4 }.Select(ToMoveInfo).ToList();
+
+        return new StoredPokemonDetail(
+            stored.Id, stored.VaultBoxId, stored.VaultBox?.Name ?? "", stored.Slot,
+            stored.Species, stored.Form, stored.IsShiny, stored.Level,
+            stored.Nickname, stored.OTName, stored.OriginGame, stored.HomeTracker, stored.DepositedAt,
+            ivs, evs, moves);
+    }
+
+    /// <summary>Maps a move ID to its English display name via PKHeX's bundled string list.</summary>
+    private static MoveInfo ToMoveInfo(ushort move)
+    {
+        var names = GameInfo.Strings.movelist;
+        return new MoveInfo(move, move < names.Length ? names[move] : "");
+    }
+
+    /// <summary>
+    /// PKH stores current moves in per-game side data that is only created from
+    /// PB7/PK7/PK8/PB8/PA8/PK9/PA9 sources — a gen ≤5 entity converted straight to
+    /// PKH loses its moves. Upgrade those to PK8 first so moves survive the deposit.
+    /// The transfer re-localizes un-nicknamed species names; restore the exact
+    /// nickname the save held.
+    /// </summary>
+    private static PKM ToHomeCompatible(PKM pk)
+    {
+        if (pk is PB7 or PK7 or PK8 or PB8 or PA8 or PK9 or PA9)
+            return pk;
+        var converted = EntityConverter.ConvertToType(pk, typeof(PK8), out var result);
+        if (converted is null || result is not EntityConverterResult.Success)
+            return pk;
+        converted.Nickname = pk.Nickname;
+        return converted;
     }
 
     /// <summary>

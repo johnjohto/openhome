@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using OpenHome.Core;
 using OpenHome.Core.Persistence;
 
@@ -28,6 +29,21 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// M2: serve the built web UI (web/dist) when it exists, with SPA fallback to
+// index.html. Skipped when the frontend hasn't been built — the API still works.
+var webDist = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "web", "dist"));
+if (Directory.Exists(webDist))
+{
+    var distFiles = new PhysicalFileProvider(webDist);
+    app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = distFiles });
+    app.UseStaticFiles(new StaticFileOptions { FileProvider = distFiles });
+    app.MapFallback(async context =>
+    {
+        context.Response.ContentType = "text/html";
+        await context.Response.SendFileAsync(Path.Combine(webDist, "index.html"));
+    });
+}
 
 // Smoke endpoint: proves the server can exercise PKHeX via OpenHome.Core.
 app.MapPost("/api/saves/summary", (IFormFile file, SaveFileService saves) =>
@@ -80,6 +96,12 @@ app.MapGet("/api/saves/{id:guid}/boxes", (Guid id, VaultService vault) => Handle
 
 app.MapGet("/api/vault/boxes", (VaultService vault) => vault.ListVaultBoxesAsync())
     .WithName("ListVaultBoxes");
+
+app.MapGet("/api/vault/pokemon", (VaultService vault) => vault.ListStoredPokemonAsync())
+    .WithName("ListVaultPokemon");
+
+app.MapGet("/api/vault/pokemon/{id:guid}", (Guid id, VaultService vault) => HandleErrors(() => vault.GetStoredPokemonAsync(id)))
+    .WithName("GetVaultPokemon");
 
 app.MapPost("/api/vault/boxes", (CreateBoxRequest? req, VaultService vault) => vault.CreateVaultBoxAsync(req?.Name))
     .WithName("CreateVaultBox");

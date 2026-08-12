@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace OpenHome.Core;
 
 /// <summary>One slot in a save-file or vault box grid. No PKHeX types cross the wire.</summary>
@@ -40,6 +42,36 @@ public sealed record StoredPokemonSummary(
     string OriginGame,
     ulong HomeTracker,
     DateTime DepositedAt);
+
+/// <summary>Six battle stats, in canonical order.</summary>
+public sealed record StatSet(int Hp, int Attack, int Defense, int SpAttack, int SpDefense, int Speed);
+
+/// <summary>A learned move: national move ID plus its display name.</summary>
+public sealed record MoveInfo(int Id, string Name);
+
+/// <summary>
+/// Full detail of a Pokémon stored in the vault: the denormalized metadata from
+/// <see cref="StoredPokemonSummary"/> plus IVs, EVs and moves read back out of the
+/// stored PKH bytes. IVs/EVs are pinned to "ivs"/"evs" — System.Text.Json would
+/// otherwise camelCase the acronyms to "iVs"/"eVs".
+/// </summary>
+public sealed record StoredPokemonDetail(
+    Guid Id,
+    Guid BoxId,
+    string BoxName,
+    int Slot,
+    int Species,
+    int Form,
+    bool IsShiny,
+    int Level,
+    string Nickname,
+    string OTName,
+    string OriginGame,
+    ulong HomeTracker,
+    DateTime DepositedAt,
+    [property: JsonPropertyName("ivs")] StatSet IVs,
+    [property: JsonPropertyName("evs")] StatSet EVs,
+    IReadOnlyList<MoveInfo> Moves);
 
 /// <summary>A save file registered in the library.</summary>
 public sealed record RegisteredSaveSummary(

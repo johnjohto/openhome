@@ -19,6 +19,7 @@ Everything verified against **PKHeX.Core 26.7.7** (net10.0). Update this file wh
 ## HOME container (PKH) — the vault format
 
 - `PKH.ConvertFromPKM(pk)` converts any entity; `ConvertToPK8()/ConvertToPB8()/ConvertToPA8()/ConvertToPK9()/ConvertToPA9()/ConvertToPB7()` go back. `EntityConverter.ConvertToType(pkh, targetType, out _)` is the generic fallback; `EntityConverter.IsConvertibleToFormat(pkh, gen)` is a cheap pre-check.
+- **Current moves live in per-game side data** (`PKH.Move1..4` read `LatestGameData`), and `PKH.CopyFrom` only creates that side for `PB7/PK7/PK8/PB8/PA8/PK9/PA9` sources — a gen ≤5 entity converted straight to PKH **silently loses its moves** (IVs/EVs/core data survive). `VaultService` upgrades gen ≤5 entities to PK8 via `EntityConverter.ConvertToType(pk, typeof(PK8))` before `ConvertFromPKM`; the transfer re-localizes un-nicknamed species names, so the original nickname is restored afterwards.
 - **Serialize with `pkh.Rebuild()`** — `ConvertFromPKM` leaves `DataVersion=0`/size fields unset, and the `PKH(Memory<byte>)` ctor throws "Unrecognized format: 0" on raw `Data`.
 - `ConvertFromPKM` does **not** assign a HOME tracker (stays 0) — VaultService mints a random unique nonzero ulong at deposit.
 - Gen ≤5 string terminator leak: PK5→PKH conversion can leave `0xFFFF` in `Nickname`/`OriginalTrainerName`. Stored metadata/DTOs are sanitized; raw bytes still carry it (revisit in M3).

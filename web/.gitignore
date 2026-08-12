@@ -1,0 +1,4 @@
+node_modules/
+dist/
+# Downloaded sprites are ripped game assets — fetch locally, never commit.
+public/sprites/

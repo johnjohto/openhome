@@ -33,7 +33,7 @@ Open-source, self-hosted Pokémon HOME alternative built on PKHeX.Core.
 
 - [x] **M0** — Scaffold + PKHeX proof of life (solution, license, SaveFileService, smoke endpoint, fixture save)
 - [x] **M1** — Vault core: EF Core schema, deposit/withdraw with PKH conversion, versioned backups, JSON API, 12 tests
-- [ ] **M2** — Web UI v1: save library, side-by-side box browser, drag-and-drop, Pokémon detail panel, sprite pipeline
+- [x] **M2** — Web UI v1: save library, side-by-side box browser, drag-and-drop, Pokémon detail panel, sprite pipeline
 - [ ] **M3** — Living dex + regional dexes; transparent legality reports; search/filter/sort; bulk ops; local trades with trade-evolution triggering; item vault; strict/free transfer toggle
 - [ ] **M4** — Romhack support: profile-driven `ISaveFilePlugin` readers (JSON profiles: save size, offsets, species table, box count); pokeemerald-expansion default profile; community profiles droppable in `data/profiles/`
 - [ ] **M5** — Pokémon Essentials: Ruby Marshal parser for `Game.rxdata`, `EssentialsSaveFile` mapping to PKM (PK3-neutral), relaxed legality rules for fangame origins, round-trip tests
