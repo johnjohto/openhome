@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpenHome.Core/OpenHome.Core.csproj" />
+    <Project Path="src/OpenHome.Formats/OpenHome.Formats.csproj" />
+    <Project Path="src/OpenHome.Server/OpenHome.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpenHome.Core.Tests/OpenHome.Core.Tests.csproj" />
+    <Project Path="tests/OpenHome.Formats.Tests/OpenHome.Formats.Tests.csproj" />
+  </Folder>
+</Solution>
