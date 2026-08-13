@@ -1,7 +1,13 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\OpenHome.Core\OpenHome.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\profiles\pokeemerald-expansion.json">
+      <LogicalName>OpenHome.Formats.profiles.pokeemerald-expansion.json</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <PropertyGroup>

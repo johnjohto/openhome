@@ -10,6 +10,10 @@ var dataRoot = Environment.GetEnvironmentVariable("OPENHOME_DATA")
 var options = new OpenHomeOptions(dataRoot);
 options.EnsureDirectories();
 
+// Custom save formats (romhack profiles, Essentials fangames) must register
+// before any save is loaded so SaveUtil detection can claim them.
+OpenHome.Formats.FormatsRegistration.RegisterAll(Path.Combine(options.DataRoot, "profiles"));
+
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton<SaveFileService>();

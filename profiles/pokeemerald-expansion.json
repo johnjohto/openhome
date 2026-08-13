@@ -1,0 +1,60 @@
+{
+  "name": "pokeemerald-expansion",
+  "description": "pokeemerald-expansion (rh-hideout) with default save config: 32-sector GBA layout, national-order species table, SaveBlock2 in sector 0, SaveBlock1 in sectors 1-4, PokemonStorage in sectors 5-13.",
+  "family": "gba-gen3",
+  "saveSize": 131072,
+  "version": "E",
+  "language": 2,
+  "sectorSize": 4096,
+  "sectorDataSize": 3968,
+  "mainSectorCount": 14,
+  "saveSlotCount": 2,
+  "footer": {
+    "idOffset": 4084,
+    "checksumOffset": 4086,
+    "signatureOffset": 4088,
+    "counterOffset": 4092,
+    "signature": "0x08012025"
+  },
+  "trainerBlock": { "sectorStart": 0, "sectorCount": 1, "size": 3884 },
+  "partyBlock": { "sectorStart": 1, "sectorCount": 4, "size": 15872 },
+  "storageBlock": { "sectorStart": 5, "sectorCount": 9, "size": 35712 },
+  "trainer": {
+    "nameOffset": 0,
+    "nameMaxLength": 7,
+    "nameStride": 8,
+    "genderOffset": 8,
+    "idOffset": 10,
+    "playTimeHoursOffset": 14,
+    "playTimeMinutesOffset": 16,
+    "playTimeSecondsOffset": 17
+  },
+  "party": {
+    "countOffset": 564,
+    "offset": 568,
+    "count": 6
+  },
+  "boxes": {
+    "currentBoxOffset": 0,
+    "dataOffset": 4,
+    "boxCount": 14,
+    "slotsPerBox": 30,
+    "boxNameOffset": 33604,
+    "boxNameMaxLength": 8,
+    "boxNameStride": 9,
+    "wallpaperOffset": 33730
+  },
+  "pokemon": {
+    "speciesOrder": "national",
+    "maxSpeciesId": 1500,
+    "maxMoveId": 919,
+    "maxAbilityId": 310,
+    "maxItemId": 2300,
+    "maxBallId": 30
+  },
+  "detection": {
+    "claimIfNationalSpecies": true,
+    "claimAllGen3": false,
+    "contentRules": []
+  }
+}

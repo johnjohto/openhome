@@ -32,7 +32,7 @@ public sealed class SaveFileService
 
         return new SaveSummary(
             Path.GetFileName(path),
-            GameInfo.GetVersionName(sav.Version),
+            sav is ICustomSaveDisplayName custom ? custom.SaveDisplayName : GameInfo.GetVersionName(sav.Version),
             sav.OT,
             sav.BoxCount,
             sav.BoxSlotCount,
