@@ -84,6 +84,36 @@ export interface StoredPokemonDetail extends StoredPokemonSummary {
   moves: MoveInfo[];
 }
 
+/** One row of GET /api/vault/pokemon/query: summary metadata plus the legality verdict. */
+export interface StoredPokemonQueryResult extends StoredPokemonSummary {
+  /** PKHeX legality verdict; null when analysis was unavailable. */
+  legalityValid: boolean | null;
+}
+
+/**
+ * Query parameters for GET /api/vault/pokemon/query. All filters are optional and
+ * AND-combined; `search` matches nickname/OT substrings (case-insensitive);
+ * `sortBy` names a denormalized column (species, form, level, nickname, ot,
+ * origingame, tracker, depositedat, box).
+ */
+export interface VaultQueryParams {
+  species?: number;
+  minLevel?: number;
+  maxLevel?: number;
+  shiny?: boolean;
+  originGame?: string;
+  legality?: 'valid' | 'invalid';
+  search?: string;
+  sortBy?: string;
+  sortDesc?: boolean;
+}
+
+/** A (box, slot) coordinate in a save file's box storage. */
+export interface BoxSlotRef {
+  box: number;
+  slot: number;
+}
+
 /** One line of a PKHeX legality report. */
 export interface LegalityCheckItem {
   identifier: string;
@@ -121,4 +151,18 @@ export interface MoveRequest {
   pokemonId: string;
   boxId: string;
   slot: number;
+}
+
+export interface BulkDepositRequest {
+  saveId: string;
+  slots: BoxSlotRef[];
+}
+
+export interface BulkMoveRequest {
+  pokemonIds: string[];
+  boxId: string;
+}
+
+export interface ReleaseRequest {
+  pokemonIds: string[];
 }

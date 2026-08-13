@@ -59,45 +59,68 @@ public sealed class VaultService(
     /// vault slot, then clears the slot in the save and writes the save back
     /// (snapshotting the previous on-disk state first).
     /// </summary>
-    public async Task<StoredPokemonSummary> DepositAsync(Guid saveId, int box, int slot, CancellationToken ct = default)
+    public async Task<StoredPokemonSummary> DepositAsync(Guid saveId, int box, int slot, CancellationToken ct = default) =>
+        (await DepositManyAsync(saveId, [new BoxSlotRef(box, slot)], ct))[0];
+
+    /// <summary>
+    /// Bulk deposit: moves several save slots into the vault in the given order,
+    /// filling free vault slots in order and auto-creating boxes as the single
+    /// deposit does. The save is snapshotted once and written back once, after all
+    /// slots are converted — a failure partway through persists nothing.
+    /// </summary>
+    public async Task<IReadOnlyList<StoredPokemonSummary>> DepositManyAsync(Guid saveId, IReadOnlyList<BoxSlotRef> slots, CancellationToken ct = default)
     {
+        if (slots.Count == 0)
+            return [];
+
         var record = await library.GetAsync(saveId, ct);
         var sav = await library.LoadAsync(record, ct);
-        ValidateSlot(sav, box, slot);
-
-        var pk = sav.GetBoxSlotAtIndex(box, slot);
-        if (pk.Species == 0)
-            throw new InvalidOperationException($"Box {box} slot {slot} is empty — nothing to deposit.");
-
-        var pkh = PKH.ConvertFromPKM(ToHomeCompatible(pk));
-        pkh.Tracker = await NewHomeTrackerAsync(ct);
-        var data = pkh.Rebuild();
-
-        var (targetBox, targetSlot) = await FindFreeSlotAsync(ct);
-        var stored = new StoredPokemon
+        if (slots.Distinct().Count() != slots.Count)
+            throw new InvalidOperationException("The same save slot was requested twice.");
+        foreach (var s in slots)
         {
-            Id = Guid.NewGuid(),
-            VaultBoxId = targetBox.Id,
-            Slot = targetSlot,
-            Data = data,
-            Species = pkh.Species,
-            Form = pkh.Form,
-            IsShiny = pkh.IsShiny,
-            Level = pkh.CurrentLevel,
-            Nickname = Sanitize(pkh.Nickname),
-            OTName = Sanitize(pkh.OriginalTrainerName),
-            OriginGame = pk.Version != GameVersion.Any ? GameInfo.GetVersionName(pk.Version) : record.Game,
-            HomeTracker = pkh.Tracker,
-            DepositedAt = DateTime.UtcNow,
-        };
+            ValidateSlot(sav, s.Box, s.Slot);
+            if (sav.GetBoxSlotAtIndex(s.Box, s.Slot).Species == 0)
+                throw new InvalidOperationException($"Box {s.Box} slot {s.Slot} is empty — nothing to deposit.");
+        }
 
         backups.Snapshot(record);
-        sav.SetBoxSlotAtIndex(sav.BlankPKM, box, slot);
-        await library.PersistAsync(record, sav, ct);
+        var boxes = await LoadBoxesOrderedAsync(ct);
 
-        db.StoredPokemon.Add(stored);
+        var results = new List<StoredPokemonSummary>(slots.Count);
+        foreach (var s in slots)
+        {
+            var pk = sav.GetBoxSlotAtIndex(s.Box, s.Slot);
+            var pkh = PKH.ConvertFromPKM(ToHomeCompatible(pk));
+            pkh.Tracker = await NewHomeTrackerAsync(ct);
+            var data = pkh.Rebuild();
+
+            var (targetBox, targetSlot) = AllocateFreeSlot(boxes, startIndex: 0);
+            var stored = new StoredPokemon
+            {
+                Id = Guid.NewGuid(),
+                VaultBoxId = targetBox.Id,
+                Slot = targetSlot,
+                Data = data,
+                Species = pkh.Species,
+                Form = pkh.Form,
+                IsShiny = pkh.IsShiny,
+                Level = pkh.CurrentLevel,
+                Nickname = Sanitize(pkh.Nickname),
+                OTName = Sanitize(pkh.OriginalTrainerName),
+                OriginGame = pk.Version != GameVersion.Any ? GameInfo.GetVersionName(pk.Version) : record.Game,
+                HomeTracker = pkh.Tracker,
+                DepositedAt = DateTime.UtcNow,
+            };
+            targetBox.Pokemon.Add(stored);
+            db.StoredPokemon.Add(stored);
+            sav.SetBoxSlotAtIndex(sav.BlankPKM, s.Box, s.Slot);
+            results.Add(ToSummary(stored, targetBox.Name));
+        }
+
+        await library.PersistAsync(record, sav, ct);
         await db.SaveChangesAsync(ct);
-        return ToSummary(stored, targetBox.Name);
+        return results;
     }
 
     /// <summary>Lists every stored Pokémon with its denormalized metadata, ordered by box order then slot.</summary>
@@ -109,6 +132,75 @@ public sealed class VaultService(
             .ThenBy(p => p.Slot)
             .ToListAsync(ct);
         return stored.Select(p => ToSummary(p, p.VaultBox?.Name ?? "")).ToList();
+    }
+
+    /// <summary>
+    /// Queries the vault over the denormalized columns: species/level/shiny/origin-game/search
+    /// filters run in SQL; the legality filter (and the per-row verdict on the result)
+    /// is computed lazily per row via <see cref="LegalityService"/> — acceptable at vault
+    /// scale, and consistent with the box grid badges. Sorting happens in memory over any
+    /// denormalized column; unknown sort names are rejected.
+    /// </summary>
+    public async Task<IReadOnlyList<StoredPokemonQueryResult>> QueryStoredPokemonAsync(VaultQueryFilter filter, CancellationToken ct = default)
+    {
+        var query = db.StoredPokemon.Include(p => p.VaultBox).AsQueryable();
+        if (filter.Species is { } species)
+            query = query.Where(p => p.Species == species);
+        if (filter.MinLevel is { } minLevel)
+            query = query.Where(p => p.Level >= minLevel);
+        if (filter.MaxLevel is { } maxLevel)
+            query = query.Where(p => p.Level <= maxLevel);
+        if (filter.Shiny is { } shiny)
+            query = query.Where(p => p.IsShiny == shiny);
+        if (!string.IsNullOrWhiteSpace(filter.OriginGame))
+            query = query.Where(p => EF.Functions.Like(p.OriginGame, filter.OriginGame));
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var term = $"%{filter.Search.Trim()}%";
+            query = query.Where(p => EF.Functions.Like(p.Nickname, term) || EF.Functions.Like(p.OTName, term));
+        }
+
+        var rows = await query.ToListAsync(ct);
+
+        // Legality has no denormalized column — analyze the stored PKH bytes per row.
+        var withLegality = rows.Select(p => (Row: p, Valid: legality.IsStoredDataValid(p.Data))).ToList();
+        withLegality = filter.Legality?.Trim().ToLowerInvariant() switch
+        {
+            null or "" => withLegality,
+            "valid" => withLegality.Where(x => x.Valid == true).ToList(),
+            "invalid" => withLegality.Where(x => x.Valid == false).ToList(),
+            var other => throw new InvalidOperationException($"Unknown legality filter '{other}' — use 'valid' or 'invalid'."),
+        };
+
+        var sorted = SortRows(withLegality, filter.SortBy, filter.SortDescending);
+        return sorted.Select(x => new StoredPokemonQueryResult(
+            x.Row.Id, x.Row.VaultBoxId, x.Row.VaultBox?.Name ?? "", x.Row.Slot,
+            x.Row.Species, x.Row.Form, x.Row.IsShiny, x.Row.Level,
+            x.Row.Nickname, x.Row.OTName, x.Row.OriginGame, x.Row.HomeTracker, x.Row.DepositedAt,
+            x.Valid)).ToList();
+    }
+
+    private static List<(StoredPokemon Row, bool? Valid)> SortRows(
+        List<(StoredPokemon Row, bool? Valid)> rows, string? sortBy, bool descending)
+    {
+        Comparison<(StoredPokemon Row, bool? Valid)> comparison = sortBy?.Trim().ToLowerInvariant() switch
+        {
+            null or "" or "box" => (a, b) => (a.Row.VaultBox?.Order ?? 0).CompareTo(b.Row.VaultBox?.Order ?? 0) is var c && c != 0 ? c : a.Row.Slot.CompareTo(b.Row.Slot),
+            "species" => (a, b) => a.Row.Species.CompareTo(b.Row.Species),
+            "form" => (a, b) => a.Row.Form.CompareTo(b.Row.Form),
+            "level" => (a, b) => a.Row.Level.CompareTo(b.Row.Level),
+            "nickname" => (a, b) => string.Compare(a.Row.Nickname, b.Row.Nickname, StringComparison.OrdinalIgnoreCase),
+            "ot" => (a, b) => string.Compare(a.Row.OTName, b.Row.OTName, StringComparison.OrdinalIgnoreCase),
+            "origingame" => (a, b) => string.Compare(a.Row.OriginGame, b.Row.OriginGame, StringComparison.OrdinalIgnoreCase),
+            "tracker" => (a, b) => a.Row.HomeTracker.CompareTo(b.Row.HomeTracker),
+            "depositedat" => (a, b) => a.Row.DepositedAt.CompareTo(b.Row.DepositedAt),
+            var other => throw new InvalidOperationException(
+                $"Unknown sort column '{other}' — use box, species, form, level, nickname, ot, origingame, tracker or depositedat."),
+        };
+        rows.Sort(descending
+            ? (a, b) => comparison(b, a)
+            : comparison);
+        return rows;
     }
 
     /// <summary>
@@ -205,6 +297,77 @@ public sealed class VaultService(
     }
 
     /// <summary>
+    /// Bulk move within the vault: relocates the given Pokémon (in the given order)
+    /// into the target box's free slots in order, overflowing into the following
+    /// boxes and auto-creating a new one when the vault runs out of room — the same
+    /// fill-in-order semantics as deposit, seeded at the target box.
+    /// </summary>
+    public async Task<IReadOnlyList<StoredPokemonSummary>> MoveManyAsync(IReadOnlyList<Guid> pokemonIds, Guid targetBoxId, CancellationToken ct = default)
+    {
+        var boxes = await LoadBoxesOrderedAsync(ct);
+        var targetIndex = boxes.FindIndex(b => b.Id == targetBoxId);
+        if (targetIndex < 0)
+            throw new KeyNotFoundException($"No vault box with id {targetBoxId}.");
+
+        var moving = await ResolveStoredAsync(pokemonIds, ct);
+
+        // Free the slots the moving Pokémon currently occupy before allocating.
+        foreach (var m in moving)
+            m.VaultBox!.Pokemon.Remove(m);
+
+        var results = new List<StoredPokemonSummary>(moving.Count);
+        var assignments = new List<(StoredPokemon Mon, int Slot)>(moving.Count);
+        foreach (var m in moving)
+        {
+            var (box, slot) = AllocateFreeSlot(boxes, targetIndex);
+            box.Pokemon.Add(m);
+            m.VaultBoxId = box.Id;
+            m.Slot = slot; // assign immediately so the next allocation sees it taken
+            assignments.Add((m, slot));
+            results.Add(ToSummary(m, box.Name));
+        }
+
+        // Two-phase update: a slot swap is a circular dependency for EF's batching
+        // against the unique (box, slot) index — park the movers on temporary
+        // negative slots (which also frees their old slots) before assigning finals.
+        for (var i = 0; i < moving.Count; i++)
+            moving[i].Slot = -1 - i;
+        await db.SaveChangesAsync(ct);
+        foreach (var (m, slot) in assignments)
+            m.Slot = slot;
+        await db.SaveChangesAsync(ct);
+        return results;
+    }
+
+    /// <summary>
+    /// Mass release: permanently deletes the given Pokémon from the vault and
+    /// returns their summaries so the caller can report exactly what was released.
+    /// Unknown ids abort the whole release before anything is deleted.
+    /// </summary>
+    public async Task<IReadOnlyList<StoredPokemonSummary>> ReleaseManyAsync(IReadOnlyList<Guid> pokemonIds, CancellationToken ct = default)
+    {
+        var releasing = await ResolveStoredAsync(pokemonIds, ct);
+        var released = releasing.Select(p => ToSummary(p, p.VaultBox?.Name ?? "")).ToList();
+        db.StoredPokemon.RemoveRange(releasing);
+        await db.SaveChangesAsync(ct);
+        return released;
+    }
+
+    /// <summary>Fetches the given stored Pokémon (with their boxes) in the order of <paramref name="pokemonIds"/>.</summary>
+    private async Task<List<StoredPokemon>> ResolveStoredAsync(IReadOnlyList<Guid> pokemonIds, CancellationToken ct)
+    {
+        if (pokemonIds.Distinct().Count() != pokemonIds.Count)
+            throw new InvalidOperationException("The same Pokémon was requested twice.");
+        var rows = await db.StoredPokemon.Include(p => p.VaultBox)
+            .Where(p => pokemonIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, ct);
+        return pokemonIds.Select(id =>
+            rows.TryGetValue(id, out var p)
+                ? p
+                : throw new KeyNotFoundException($"No stored Pokémon with id {id}.")).ToList();
+    }
+
+    /// <summary>
     /// Converts a PKH into the entity format used by <paramref name="sav"/>. Prefers
     /// the dedicated <c>PKH.ConvertTo*</c> methods; falls back to
     /// <see cref="EntityConverter"/> and finally throws <see cref="UnsupportedConversionException"/>.
@@ -238,12 +401,24 @@ public sealed class VaultService(
             "Pokémon HOME cannot transfer an entity back to a generation older than its origin.");
     }
 
-    private async Task<(VaultBox Box, int Slot)> FindFreeSlotAsync(CancellationToken ct)
+    /// <summary>Loads all vault boxes (creating the default box on first use) with their occupants, in order.</summary>
+    private async Task<List<VaultBox>> LoadBoxesOrderedAsync(CancellationToken ct)
     {
         await EnsureDefaultBoxAsync(ct);
-        var boxes = await db.VaultBoxes.Include(b => b.Pokemon).OrderBy(b => b.Order).ToListAsync(ct);
-        foreach (var box in boxes)
+        return await db.VaultBoxes.Include(b => b.Pokemon).OrderBy(b => b.Order).ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Finds the first free slot scanning from <paramref name="startIndex"/> onward,
+    /// auto-creating a new box (registered with the context) when every box is full.
+    /// The caller adds the new occupant to the returned box's <see cref="VaultBox.Pokemon"/>
+    /// so repeated allocations see it.
+    /// </summary>
+    private (VaultBox Box, int Slot) AllocateFreeSlot(List<VaultBox> boxes, int startIndex)
+    {
+        for (var i = startIndex; i < boxes.Count; i++)
         {
+            var box = boxes[i];
             var used = box.Pokemon.Select(p => p.Slot).ToHashSet();
             for (var slot = 0; slot < VaultBox.SlotCount; slot++)
             {
@@ -254,6 +429,7 @@ public sealed class VaultService(
 
         var created = new VaultBox { Id = Guid.NewGuid(), Name = $"Vault {boxes.Count + 1}", Order = boxes.Count };
         db.VaultBoxes.Add(created);
+        boxes.Add(created);
         return (created, 0);
     }
 

@@ -101,6 +101,18 @@ app.MapGet("/api/vault/boxes", (VaultService vault) => vault.ListVaultBoxesAsync
 app.MapGet("/api/vault/pokemon", (VaultService vault) => vault.ListStoredPokemonAsync())
     .WithName("ListVaultPokemon");
 
+// Query endpoint over the denormalized columns. Legality ("valid"/"invalid") is
+// computed lazily per row — no denormalized verdict column. The web UI filters
+// client-side over GET /api/vault/pokemon instead (vault scale is small); this
+// endpoint serves API consumers and larger vaults.
+app.MapGet("/api/vault/pokemon/query", (
+        int? species, int? minLevel, int? maxLevel, bool? shiny,
+        string? originGame, string? legality, string? search,
+        string? sortBy, bool sortDesc, VaultService vault) =>
+    HandleErrors(() => vault.QueryStoredPokemonAsync(
+        new VaultQueryFilter(species, minLevel, maxLevel, shiny, originGame, legality, search, sortBy, sortDesc))))
+    .WithName("QueryVaultPokemon");
+
 app.MapGet("/api/vault/pokemon/{id:guid}", (Guid id, VaultService vault) => HandleErrors(() => vault.GetStoredPokemonAsync(id)))
     .WithName("GetVaultPokemon");
 
@@ -119,6 +131,16 @@ app.MapPost("/api/vault/withdraw", (WithdrawRequest req, VaultService vault) => 
 
 app.MapPost("/api/vault/move", (MoveRequest req, VaultService vault) => HandleErrors(() => vault.MovePokemonAsync(req.PokemonId, req.BoxId, req.Slot)))
     .WithName("MovePokemon");
+
+app.MapPost("/api/vault/deposit/bulk", (BulkDepositRequest req, VaultService vault) => HandleErrors(() => vault.DepositManyAsync(req.SaveId, req.Slots)))
+    .WithName("BulkDepositPokemon");
+
+app.MapPost("/api/vault/move/bulk", (BulkMoveRequest req, VaultService vault) => HandleErrors(() => vault.MoveManyAsync(req.PokemonIds, req.BoxId)))
+    .WithName("BulkMovePokemon");
+
+// Release is permanent — the response reports exactly what was released.
+app.MapPost("/api/vault/release", (ReleaseRequest req, VaultService vault) => HandleErrors(() => vault.ReleaseManyAsync(req.PokemonIds)))
+    .WithName("ReleasePokemon");
 
 app.Run();
 
@@ -150,3 +172,6 @@ internal sealed record CreateBoxRequest(string? Name);
 internal sealed record DepositRequest(Guid SaveId, int Box, int Slot);
 internal sealed record WithdrawRequest(Guid PokemonId, Guid SaveId, int Box, int Slot);
 internal sealed record MoveRequest(Guid PokemonId, Guid BoxId, int Slot);
+internal sealed record BulkDepositRequest(Guid SaveId, BoxSlotRef[] Slots);
+internal sealed record BulkMoveRequest(Guid[] PokemonIds, Guid BoxId);
+internal sealed record ReleaseRequest(Guid[] PokemonIds);

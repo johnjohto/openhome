@@ -14,12 +14,19 @@ export function BoxGrid({
   makeSlotId,
   disabled = false,
   selectedSlotId = null,
+  selectedSlotIds = null,
+  dimmedSlotIds = null,
   onSelect,
 }: {
   slots: BoxSlotSummary[];
   makeSlotId: (slot: number) => string;
   disabled?: boolean;
+  /** Single highlighted slot (detail pane selection). */
   selectedSlotId?: string | null;
+  /** Multi-select: every id in the set renders highlighted. */
+  selectedSlotIds?: ReadonlySet<string> | null;
+  /** Slots dimmed out by an active filter (they stay interactive). */
+  dimmedSlotIds?: ReadonlySet<string> | null;
   onSelect?: (slot: BoxSlotSummary) => void;
 }) {
   const bySlot = new Map(slots.map((s) => [s.slot, s]));
@@ -51,7 +58,8 @@ export function BoxGrid({
             slotId={slotId}
             slot={slot}
             disabled={disabled}
-            selected={selectedSlotId === slotId}
+            selected={selectedSlotId === slotId || (selectedSlotIds?.has(slotId) ?? false)}
+            dimmed={dimmedSlotIds?.has(slotId) ?? false}
             onSelect={onSelect}
           />
         );

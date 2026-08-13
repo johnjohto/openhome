@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from './client';
-import type { CreateBoxRequest, DepositRequest, MoveRequest, WithdrawRequest } from './types';
+import type {
+  BulkDepositRequest,
+  BulkMoveRequest,
+  CreateBoxRequest,
+  DepositRequest,
+  MoveRequest,
+  ReleaseRequest,
+  WithdrawRequest,
+} from './types';
 
 export const queryKeys = {
   saves: ['saves'] as const,
@@ -48,7 +56,7 @@ export function useVaultLegality(id: string | null) {
 }
 
 /** Every vault mutation reshapes both the vault and the open save. */
-function useInvalidatingMutation<TReq>(fn: (req: TReq) => Promise<unknown>) {
+function useInvalidatingMutation<TReq, TRes>(fn: (req: TReq) => Promise<TRes>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: fn,
@@ -78,4 +86,16 @@ export function useWithdraw() {
 
 export function useMove() {
   return useInvalidatingMutation((req: MoveRequest) => api.move(req));
+}
+
+export function useDepositMany() {
+  return useInvalidatingMutation((req: BulkDepositRequest) => api.depositMany(req));
+}
+
+export function useMoveMany() {
+  return useInvalidatingMutation((req: BulkMoveRequest) => api.moveMany(req));
+}
+
+export function useRelease() {
+  return useInvalidatingMutation((req: ReleaseRequest) => api.release(req));
 }

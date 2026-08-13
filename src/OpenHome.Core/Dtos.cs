@@ -78,6 +78,50 @@ public sealed record StoredPokemonDetail(
     [property: JsonPropertyName("evs")] StatSet EVs,
     IReadOnlyList<MoveInfo> Moves);
 
+/// <summary>
+/// Filter/sort parameters for a vault query. All filters are optional and
+/// AND-combined; <see cref="Legality"/> accepts "valid" or "invalid" (null verdicts
+/// match neither). <see cref="Search"/> is a case-insensitive substring over
+/// nickname and OT. <see cref="SortBy"/> names a denormalized column
+/// ("species", "form", "level", "nickname", "ot", "origingame", "tracker",
+/// "depositedat", "box"); null/empty sorts by box order then slot.
+/// </summary>
+public sealed record VaultQueryFilter(
+    int? Species = null,
+    int? MinLevel = null,
+    int? MaxLevel = null,
+    bool? Shiny = null,
+    string? OriginGame = null,
+    string? Legality = null,
+    string? Search = null,
+    string? SortBy = null,
+    bool SortDescending = false);
+
+/// <summary>
+/// One row of a vault query result: the denormalized metadata of
+/// <see cref="StoredPokemonSummary"/> plus the PKHeX legality verdict (null when
+/// analysis was unavailable). Legality is computed lazily per result row — fine at
+/// vault scale (the box grid already does the same for its badges).
+/// </summary>
+public sealed record StoredPokemonQueryResult(
+    Guid Id,
+    Guid BoxId,
+    string BoxName,
+    int Slot,
+    int Species,
+    int Form,
+    bool IsShiny,
+    int Level,
+    string Nickname,
+    string OTName,
+    string OriginGame,
+    ulong HomeTracker,
+    DateTime DepositedAt,
+    bool? LegalityValid);
+
+/// <summary>A (box, slot) coordinate in a save file's box storage.</summary>
+public sealed record BoxSlotRef(int Box, int Slot);
+
 /// <summary>A save file registered in the library.</summary>
 public sealed record RegisteredSaveSummary(
     Guid Id,

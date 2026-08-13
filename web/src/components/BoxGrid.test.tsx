@@ -78,4 +78,38 @@ describe('BoxGrid', () => {
     expect(screen.getByLabelText('legality: invalid')).toBeInTheDocument();
     expect(screen.getAllByLabelText(/^legality:/)).toHaveLength(2);
   });
+
+  it('highlights every slot id in the multi-select set', () => {
+    render(
+      <DndContext>
+        <BoxGrid
+          slots={[
+            slot({ slot: 0, isEmpty: false, species: 25, nickname: 'PIKA', level: 5 }),
+            slot({ slot: 1, isEmpty: false, species: 133, nickname: 'EVE', level: 5 }),
+          ]}
+          makeSlotId={(s) => `test:${s}`}
+          selectedSlotIds={new Set(['test:0', 'test:1'])}
+        />
+      </DndContext>,
+    );
+
+    expect(screen.getByTestId('slot-test:0').className).toContain('ring-amber-400');
+    expect(screen.getByTestId('slot-test:1').className).toContain('ring-amber-400');
+    expect(screen.getByTestId('slot-test:2').className).not.toContain('ring-amber-400');
+  });
+
+  it('dims slots listed in dimmedSlotIds without hiding them', () => {
+    render(
+      <DndContext>
+        <BoxGrid
+          slots={[slot({ slot: 4, isEmpty: false, species: 25, nickname: 'PIKA', level: 5 })]}
+          makeSlotId={(s) => `test:${s}`}
+          dimmedSlotIds={new Set(['test:4'])}
+        />
+      </DndContext>,
+    );
+
+    expect(screen.getByTestId('slot-test:4').className).toContain('opacity-30');
+    expect(screen.getByTestId('slot-test:5').className).not.toContain('opacity-30');
+  });
 });

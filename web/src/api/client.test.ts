@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, deposit, getSaveBoxes, getVaultLegality, getVaultPokemon, listSaves, listVaultBoxes, listVaultPokemon, move, uploadSave, withdraw } from './client';
-import type { BoxView, LegalityReport, RegisteredSaveSummary, StoredPokemonDetail, StoredPokemonSummary, VaultBoxView } from './types';
+import { ApiError, deposit, depositMany, getSaveBoxes, getVaultLegality, getVaultPokemon, listSaves, listVaultBoxes, listVaultPokemon, move, moveMany, queryVaultPokemon, release, uploadSave, withdraw } from './client';
+import type { BoxView, LegalityReport, RegisteredSaveSummary, StoredPokemonDetail, StoredPokemonQueryResult, StoredPokemonSummary, VaultBoxView } from './types';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -211,5 +211,85 @@ describe('API client', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(400);
     expect((err as ApiError).message).toContain('nothing to deposit');
+  });
+
+  it('builds the vault query string from set params only', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+
+    await queryVaultPokemon({
+      species: 25,
+      minLevel: 10,
+      shiny: true,
+      originGame: 'Black',
+      legality: 'valid',
+      search: 'pik',
+      sortBy: 'level',
+      sortDesc: true,
+    });
+
+    const [path] = fetchMock.mock.calls[0] as [string];
+    expect(path).toBe(
+      '/api/vault/pokemon/query?species=25&minLevel=10&shiny=true&originGame=Black&legality=valid&search=pik&sortBy=level&sortDesc=true',
+    );
+  });
+
+  it('omits unset query params entirely', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+
+    await queryVaultPokemon({});
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/vault/pokemon/query', undefined);
+  });
+
+  it('maps the query result row with its legality verdict', async () => {
+    const payload: StoredPokemonQueryResult[] = [
+      {
+        id: '3f4b9c1e-0000-4000-8000-000000000001',
+        boxId: '3f4b9c1e-0000-4000-8000-0000000000aa',
+        boxName: 'Vault 1',
+        slot: 0,
+        species: 25,
+        form: 0,
+        isShiny: false,
+        level: 42,
+        nickname: 'Pika',
+        otName: 'TEST',
+        originGame: 'Black',
+        homeTracker: 123456789,
+        depositedAt: '2026-08-01T10:00:00Z',
+        legalityValid: false,
+      },
+    ];
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const results = await queryVaultPokemon({ legality: 'invalid' });
+
+    expect(results[0].legalityValid).toBe(false);
+    expect(results[0].originGame).toBe('Black');
+  });
+
+  it('posts bulk deposit/move/release with JSON bodies matching the server records', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse([])));
+
+    await depositMany({ saveId: 's1', slots: [{ box: 0, slot: 3 }, { box: 1, slot: 7 }] });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/vault/deposit/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saveId: 's1', slots: [{ box: 0, slot: 3 }, { box: 1, slot: 7 }] }),
+    });
+
+    await moveMany({ pokemonIds: ['p1', 'p2'], boxId: 'b1' });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/vault/move/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pokemonIds: ['p1', 'p2'], boxId: 'b1' }),
+    });
+
+    await release({ pokemonIds: ['p1'] });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/vault/release', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pokemonIds: ['p1'] }),
+    });
   });
 });

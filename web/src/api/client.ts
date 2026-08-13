@@ -1,13 +1,18 @@
 import type {
   BoxView,
+  BulkDepositRequest,
+  BulkMoveRequest,
   CreateBoxRequest,
   DepositRequest,
   LegalityReport,
   MoveRequest,
   RegisteredSaveSummary,
+  ReleaseRequest,
   StoredPokemonDetail,
+  StoredPokemonQueryResult,
   StoredPokemonSummary,
   VaultBoxView,
+  VaultQueryParams,
   WithdrawRequest,
 } from './types';
 
@@ -76,6 +81,22 @@ export function listVaultPokemon(): Promise<StoredPokemonSummary[]> {
   return request('/api/vault/pokemon');
 }
 
+/** GET /api/vault/pokemon/query — server-side filter/sort over the denormalized columns. */
+export function queryVaultPokemon(params: VaultQueryParams): Promise<StoredPokemonQueryResult[]> {
+  const qs = new URLSearchParams();
+  if (params.species !== undefined) qs.set('species', String(params.species));
+  if (params.minLevel !== undefined) qs.set('minLevel', String(params.minLevel));
+  if (params.maxLevel !== undefined) qs.set('maxLevel', String(params.maxLevel));
+  if (params.shiny !== undefined) qs.set('shiny', String(params.shiny));
+  if (params.originGame) qs.set('originGame', params.originGame);
+  if (params.legality) qs.set('legality', params.legality);
+  if (params.search) qs.set('search', params.search);
+  if (params.sortBy) qs.set('sortBy', params.sortBy);
+  if (params.sortDesc) qs.set('sortDesc', 'true');
+  const query = qs.toString();
+  return request(`/api/vault/pokemon/query${query ? `?${query}` : ''}`);
+}
+
 /** GET /api/vault/pokemon/{id} — one stored Pokémon with IVs, EVs and moves. */
 export function getVaultPokemon(id: string): Promise<StoredPokemonDetail> {
   return request(`/api/vault/pokemon/${id}`);
@@ -104,4 +125,19 @@ export function withdraw(req: WithdrawRequest): Promise<StoredPokemonSummary> {
 /** POST /api/vault/move — vault slot → vault slot. */
 export function move(req: MoveRequest): Promise<StoredPokemonSummary> {
   return post('/api/vault/move', req);
+}
+
+/** POST /api/vault/deposit/bulk — several save slots → free vault slots, in order. */
+export function depositMany(req: BulkDepositRequest): Promise<StoredPokemonSummary[]> {
+  return post('/api/vault/deposit/bulk', req);
+}
+
+/** POST /api/vault/move/bulk — several stored Pokémon → free slots of a target box, in order. */
+export function moveMany(req: BulkMoveRequest): Promise<StoredPokemonSummary[]> {
+  return post('/api/vault/move/bulk', req);
+}
+
+/** POST /api/vault/release — permanent; the response reports what was released. */
+export function release(req: ReleaseRequest): Promise<StoredPokemonSummary[]> {
+  return post('/api/vault/release', req);
 }

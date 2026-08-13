@@ -12,12 +12,15 @@ export function BoxSlotCell({
   slot,
   disabled = false,
   selected = false,
+  dimmed = false,
   onSelect,
 }: {
   slotId: string;
   slot: BoxSlotSummary;
   disabled?: boolean;
   selected?: boolean;
+  /** Dimmed out by an active filter — still interactive. */
+  dimmed?: boolean;
   onSelect?: (slot: BoxSlotSummary) => void;
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
@@ -43,6 +46,7 @@ export function BoxSlotCell({
           : 'cursor-grab border-slate-600 bg-slate-800 hover:border-sky-400',
         isOver ? 'border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400' : '',
         isDragging ? 'opacity-30' : '',
+        dimmed && !isDragging ? 'opacity-30' : '',
         selected ? 'ring-2 ring-amber-400' : '',
       ].join(' ')}
     >
