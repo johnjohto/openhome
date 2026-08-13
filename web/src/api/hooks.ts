@@ -17,6 +17,8 @@ export const queryKeys = {
   vaultPokemon: ['vault', 'pokemon'] as const,
   vaultPokemonDetail: (id: string) => ['vault', 'pokemon', id] as const,
   vaultPokemonLegality: (id: string) => ['vault', 'pokemon', id, 'legality'] as const,
+  nationalDex: ['dex', 'national'] as const,
+  saveDex: (saveId: string) => ['dex', 'saves', saveId] as const,
 };
 
 export function useSaves() {
@@ -55,7 +57,19 @@ export function useVaultLegality(id: string | null) {
   });
 }
 
-/** Every vault mutation reshapes both the vault and the open save. */
+export function useNationalDex() {
+  return useQuery({ queryKey: queryKeys.nationalDex, queryFn: api.getNationalDex });
+}
+
+export function useSaveDex(saveId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.saveDex(saveId ?? 'none'),
+    queryFn: () => api.getSaveDex(saveId as string),
+    enabled: saveId !== null,
+  });
+}
+
+/** Every vault mutation reshapes the vault, the open save, and both dexes. */
 function useInvalidatingMutation<TReq, TRes>(fn: (req: TReq) => Promise<TRes>) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -64,6 +78,8 @@ function useInvalidatingMutation<TReq, TRes>(fn: (req: TReq) => Promise<TRes>) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.vaultBoxes });
       void queryClient.invalidateQueries({ queryKey: queryKeys.vaultPokemon });
       void queryClient.invalidateQueries({ queryKey: queryKeys.saves });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.nationalDex });
+      void queryClient.invalidateQueries({ queryKey: ['dex', 'saves'] });
     },
   });
 }

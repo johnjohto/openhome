@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, deposit, depositMany, getSaveBoxes, getVaultLegality, getVaultPokemon, listSaves, listVaultBoxes, listVaultPokemon, move, moveMany, queryVaultPokemon, release, uploadSave, withdraw } from './client';
-import type { BoxView, LegalityReport, RegisteredSaveSummary, StoredPokemonDetail, StoredPokemonQueryResult, StoredPokemonSummary, VaultBoxView } from './types';
+import { ApiError, deposit, depositMany, getNationalDex, getSaveBoxes, getSaveDex, getVaultLegality, getVaultPokemon, listSaves, listVaultBoxes, listVaultPokemon, move, moveMany, queryVaultPokemon, release, uploadSave, withdraw } from './client';
+import type { BoxView, LegalityReport, NationalDexProgress, RegisteredSaveSummary, SaveDexProgress, StoredPokemonDetail, StoredPokemonQueryResult, StoredPokemonSummary, VaultBoxView } from './types';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -201,6 +201,49 @@ describe('API client', () => {
     expect(report.checks[0].severity).toBe('Invalid');
     expect(report.checks[0].valid).toBe(false);
     expect(report.checks[0].message).toContain('ball');
+  });
+
+  it('maps GET /api/dex/national to the national dex progress', async () => {
+    const payload: NationalDexProgress = {
+      total: 1025,
+      owned: 2,
+      shinyOwned: 1,
+      species: [
+        { species: 25, name: 'Pikachu', owned: true, shinyOwned: true, ownedForms: [0] },
+        { species: 201, name: 'Unown', owned: true, shinyOwned: false, ownedForms: [1, 2] },
+      ],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const dex = await getNationalDex();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/dex/national', undefined);
+    expect(dex.total).toBe(1025);
+    expect(dex.owned).toBe(2);
+    expect(dex.shinyOwned).toBe(1);
+    expect(dex.species[0].shinyOwned).toBe(true);
+    expect(dex.species[1].ownedForms).toEqual([1, 2]);
+  });
+
+  it('maps GET /api/dex/saves/{id} to the save dex progress', async () => {
+    const payload: SaveDexProgress = {
+      saveId: '3f4b9c1e-0000-4000-8000-000000000001',
+      game: 'Black',
+      trainerName: 'TEST',
+      usesSaveDexData: true,
+      total: 649,
+      seen: 2,
+      caught: 2,
+      seenSpecies: [1, 4],
+      caughtSpecies: [1, 4],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const dex = await getSaveDex('3f4b9c1e-0000-4000-8000-000000000001');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/dex/saves/3f4b9c1e-0000-4000-8000-000000000001', undefined);
+    expect(dex.usesSaveDexData).toBe(true);
+    expect(dex.caughtSpecies).toEqual([1, 4]);
   });
 
   it('throws ApiError with the server error message on failure', async () => {

@@ -152,3 +152,41 @@ public sealed record LegalityReport(
     bool Valid,
     bool Parsed,
     IReadOnlyList<LegalityCheckItem> Checks);
+
+/// <summary>
+/// National-dex progress for one species: whether any copy is in the vault,
+/// whether a shiny copy is (tracked separately), and which forms are owned.
+/// </summary>
+public sealed record DexSpeciesProgress(
+    int Species,
+    string Name,
+    bool Owned,
+    bool ShinyOwned,
+    IReadOnlyList<int> OwnedForms);
+
+/// <summary>
+/// Living national dex computed from current vault contents: one entry per
+/// species id (1..Total), with owned/shiny-owned rollup counts.
+/// </summary>
+public sealed record NationalDexProgress(
+    int Total,
+    int Owned,
+    int ShinyOwned,
+    IReadOnlyList<DexSpeciesProgress> Species);
+
+/// <summary>
+/// Dex progress of one registered save. When <see cref="UsesSaveDexData"/> is
+/// true, seen/caught come from the save's own Pokédex data (capped at that
+/// game's species range); otherwise the save format has no dex and the numbers
+/// are species present in the save's boxes, with seen == caught.
+/// </summary>
+public sealed record SaveDexProgress(
+    Guid SaveId,
+    string Game,
+    string TrainerName,
+    bool UsesSaveDexData,
+    int Total,
+    int Seen,
+    int Caught,
+    IReadOnlyList<int> SeenSpecies,
+    IReadOnlyList<int> CaughtSpecies);

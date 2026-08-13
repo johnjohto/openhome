@@ -18,6 +18,7 @@ builder.Services.AddDbContext<OpenHomeDbContext>(o => o.UseSqlite($"Data Source=
 builder.Services.AddScoped<SaveLibraryService>();
 builder.Services.AddScoped<LegalityService>();
 builder.Services.AddScoped<VaultService>();
+builder.Services.AddScoped<DexService>();
 
 var app = builder.Build();
 
@@ -141,6 +142,14 @@ app.MapPost("/api/vault/move/bulk", (BulkMoveRequest req, VaultService vault) =>
 // Release is permanent — the response reports exactly what was released.
 app.MapPost("/api/vault/release", (ReleaseRequest req, VaultService vault) => HandleErrors(() => vault.ReleaseManyAsync(req.PokemonIds)))
     .WithName("ReleasePokemon");
+
+// Living national dex, computed from current vault contents.
+app.MapGet("/api/dex/national", (DexService dex) => dex.GetNationalDexAsync())
+    .WithName("GetNationalDex");
+
+// Per-save dex: the save's own seen/caught data when it has a Pokédex, else box contents.
+app.MapGet("/api/dex/saves/{id:guid}", (Guid id, DexService dex) => HandleErrors(() => dex.GetSaveDexAsync(id)))
+    .WithName("GetSaveDex");
 
 app.Run();
 

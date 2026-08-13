@@ -6,8 +6,10 @@ import type {
   DepositRequest,
   LegalityReport,
   MoveRequest,
+  NationalDexProgress,
   RegisteredSaveSummary,
   ReleaseRequest,
+  SaveDexProgress,
   StoredPokemonDetail,
   StoredPokemonQueryResult,
   StoredPokemonSummary,
@@ -105,6 +107,16 @@ export function getVaultPokemon(id: string): Promise<StoredPokemonDetail> {
 /** GET /api/vault/pokemon/{id}/legality — the full PKHeX legality report. */
 export function getVaultLegality(id: string): Promise<LegalityReport> {
   return request(`/api/vault/pokemon/${id}/legality`);
+}
+
+/** GET /api/dex/national — living national dex computed from vault contents. */
+export function getNationalDex(): Promise<NationalDexProgress> {
+  return request('/api/dex/national');
+}
+
+/** GET /api/dex/saves/{id} — one save's own seen/caught dex progress. */
+export function getSaveDex(saveId: string): Promise<SaveDexProgress> {
+  return request(`/api/dex/saves/${saveId}`);
 }
 
 /** POST /api/vault/boxes */

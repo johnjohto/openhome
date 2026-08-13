@@ -130,6 +130,39 @@ export interface LegalityReport {
   checks: LegalityCheckItem[];
 }
 
+/** National-dex progress for one species: owned, shiny-owned, and owned forms. */
+export interface DexSpeciesProgress {
+  species: number;
+  name: string;
+  owned: boolean;
+  shinyOwned: boolean;
+  ownedForms: number[];
+}
+
+/** Living national dex computed from current vault contents (one entry per species id). */
+export interface NationalDexProgress {
+  total: number;
+  owned: number;
+  shinyOwned: number;
+  species: DexSpeciesProgress[];
+}
+
+/**
+ * Dex progress of one registered save. When `usesSaveDexData` is false the save
+ * format has no Pokédex and the numbers are species present in its boxes.
+ */
+export interface SaveDexProgress {
+  saveId: string;
+  game: string;
+  trainerName: string;
+  usesSaveDexData: boolean;
+  total: number;
+  seen: number;
+  caught: number;
+  seenSpecies: number[];
+  caughtSpecies: number[];
+}
+
 export interface CreateBoxRequest {
   name?: string | null;
 }

@@ -30,6 +30,12 @@ Everything verified against **PKHeX.Core 26.7.7** (net10.0). Update this file wh
 - Custom rules: `ExternalLegalityCheck.ExternalCheckers`.
 - Custom save formats: `SaveUtil.CustomSaveReaders` (`ISaveFilePlugin`) — the M4/M5 hook.
 
+## Pokédex data
+
+- Species names + national ceiling: `GameInfo.Strings.specieslist` — index 0 is the `"---"` placeholder, so the max valid species id is `Count() - 1` (1025 at 26.7.7). `SaveFile.MaxSpeciesID` is the save's own range (e.g. 649 for Black).
+- Cross-version per-save dex: `sav.HasPokeDex`, `sav.GetSeen(ushort)` / `sav.GetCaught(ushort)`, plus `SeenCount`/`CaughtCount` rollups. Used by `DexService`; saves without a dex fall back to box contents.
+- **Blank-save quirk**: public `SetSeen`/`SetCaught` are no-ops on a never-initialized `BlankSaveFile` — only the non-public `SetDex(PKM)` populates the dex block (tests reach it via reflection). Placing a Pokémon with `SetBoxSlotAtIndex` (default `EntityImportSettings`) also marks it seen+caught automatically.
+
 ## Test fixtures — BlankSaveFile quirks
 
 `var sav = BlankSaveFile.Get(GameVersion.B, "TEST"); sav.State.Edited = true; sav.Write().ToArray();`
