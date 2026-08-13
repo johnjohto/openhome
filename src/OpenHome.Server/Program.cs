@@ -19,6 +19,7 @@ builder.Services.AddScoped<SaveLibraryService>();
 builder.Services.AddScoped<LegalityService>();
 builder.Services.AddScoped<VaultService>();
 builder.Services.AddScoped<DexService>();
+builder.Services.AddScoped<TradeService>();
 
 var app = builder.Build();
 
@@ -143,6 +144,12 @@ app.MapPost("/api/vault/move/bulk", (BulkMoveRequest req, VaultService vault) =>
 app.MapPost("/api/vault/release", (ReleaseRequest req, VaultService vault) => HandleErrors(() => vault.ReleaseManyAsync(req.PokemonIds)))
     .WithName("ReleasePokemon");
 
+// Local trade: swaps the Pokémon in two save slots (either save may be the same
+// one) and applies trade evolution on receipt. Both saves are snapshotted first.
+app.MapPost("/api/trades", (TradeRequest req, TradeService trades) =>
+    HandleErrors(() => trades.TradeAsync(req.SaveAId, req.BoxA, req.SlotA, req.SaveBId, req.BoxB, req.SlotB)))
+    .WithName("TradePokemon");
+
 // Living national dex, computed from current vault contents.
 app.MapGet("/api/dex/national", (DexService dex) => dex.GetNationalDexAsync())
     .WithName("GetNationalDex");
@@ -184,3 +191,4 @@ internal sealed record MoveRequest(Guid PokemonId, Guid BoxId, int Slot);
 internal sealed record BulkDepositRequest(Guid SaveId, BoxSlotRef[] Slots);
 internal sealed record BulkMoveRequest(Guid[] PokemonIds, Guid BoxId);
 internal sealed record ReleaseRequest(Guid[] PokemonIds);
+internal sealed record TradeRequest(Guid SaveAId, int BoxA, int SlotA, Guid SaveBId, int BoxB, int SlotB);

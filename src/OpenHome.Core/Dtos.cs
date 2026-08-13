@@ -122,6 +122,32 @@ public sealed record StoredPokemonQueryResult(
 /// <summary>A (box, slot) coordinate in a save file's box storage.</summary>
 public sealed record BoxSlotRef(int Box, int Slot);
 
+/// <summary>
+/// One side of a completed trade: the Pokémon as it now stands in this save's slot,
+/// plus whether receiving it triggered a trade evolution (and from which species).
+/// </summary>
+public sealed record TradeSlotResult(
+    Guid SaveId,
+    int Box,
+    int Slot,
+    int Species,
+    int Form,
+    string Nickname,
+    int Level,
+    bool IsShiny,
+    string SpeciesName,
+    bool Evolved,
+    int EvolvedFromSpecies,
+    string? EvolvedFromName);
+
+/// <summary>
+/// Report of a completed trade: both sides after the swap. <see cref="SideA"/> is
+/// what save A received (now sitting at A's slot), <see cref="SideB"/> what B received.
+/// </summary>
+public sealed record TradeReport(
+    TradeSlotResult SideA,
+    TradeSlotResult SideB);
+
 /// <summary>A save file registered in the library.</summary>
 public sealed record RegisteredSaveSummary(
     Guid Id,

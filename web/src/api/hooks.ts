@@ -7,6 +7,7 @@ import type {
   DepositRequest,
   MoveRequest,
   ReleaseRequest,
+  TradeRequest,
   WithdrawRequest,
 } from './types';
 
@@ -114,4 +115,8 @@ export function useMoveMany() {
 
 export function useRelease() {
   return useInvalidatingMutation((req: ReleaseRequest) => api.release(req));
+}
+
+export function useTrade() {
+  return useInvalidatingMutation((req: TradeRequest) => api.trade(req));
 }

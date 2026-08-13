@@ -18,11 +18,13 @@ import {
   useMoveMany,
   useRelease,
   useSaveBoxes,
+  useSaves,
+  useTrade,
   useVaultBoxes,
   useVaultPokemon,
   useWithdraw,
 } from '../api/hooks';
-import type { BoxSlotRef, BoxSlotSummary, RegisteredSaveSummary, StoredPokemonSummary } from '../api/types';
+import type { BoxSlotRef, BoxSlotSummary, RegisteredSaveSummary, StoredPokemonSummary, TradeReport } from '../api/types';
 import { BoxGrid } from '../components/BoxGrid';
 import { BoxSwitcher } from '../components/BoxSwitcher';
 import { PokemonDetail, type SelectedSlot } from '../components/PokemonDetail';
@@ -64,6 +66,7 @@ export function BoxBrowserPage({
   const saveBoxes = useSaveBoxes(save.id);
   const vaultBoxes = useVaultBoxes();
   const vaultPokemon = useVaultPokemon();
+  const saves = useSaves();
   const deposit = useDeposit();
   const withdraw = useWithdraw();
   const move = useMove();
@@ -71,6 +74,7 @@ export function BoxBrowserPage({
   const depositMany = useDepositMany();
   const moveMany = useMoveMany();
   const release = useRelease();
+  const trade = useTrade();
 
   const [saveBoxIndex, setSaveBoxIndex] = useState(0);
   const [vaultBoxIndex, setVaultBoxIndex] = useState(0);
@@ -81,6 +85,20 @@ export function BoxBrowserPage({
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
   const [releaseReport, setReleaseReport] = useState<StoredPokemonSummary[] | null>(null);
+  // Trade mode: the right panel swaps the vault for a second save; one picked slot
+  // per side plus a confirm. Picking the same save as the partner is allowed —
+  // self-trade evolution is a core fan request.
+  const [tradeMode, setTradeMode] = useState(false);
+  const [partnerSaveId, setPartnerSaveId] = useState<string | null>(null);
+  const [partnerBoxIndex, setPartnerBoxIndex] = useState(0);
+  const [tradePickA, setTradePickA] = useState<{ box: number; slot: BoxSlotSummary } | null>(null);
+  const [tradePickB, setTradePickB] = useState<{ box: number; slot: BoxSlotSummary } | null>(null);
+  const [tradeReport, setTradeReport] = useState<TradeReport | null>(null);
+
+  const partnerOptions = saves.data ?? [];
+  const partnerId =
+    partnerSaveId ?? partnerOptions.find((s) => s.id !== save.id)?.id ?? save.id;
+  const partnerBoxes = useSaveBoxes(tradeMode ? partnerId : null);
 
   const mutating =
     deposit.isPending ||
@@ -89,7 +107,8 @@ export function BoxBrowserPage({
     createBox.isPending ||
     depositMany.isPending ||
     moveMany.isPending ||
-    release.isPending;
+    release.isPending ||
+    trade.isPending;
   const mutationError =
     deposit.error ??
     withdraw.error ??
@@ -97,12 +116,24 @@ export function BoxBrowserPage({
     createBox.error ??
     depositMany.error ??
     moveMany.error ??
-    release.error;
+    release.error ??
+    trade.error;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const currentSaveBox = saveBoxes.data?.[Math.min(saveBoxIndex, (saveBoxes.data?.length ?? 1) - 1)];
   const currentVaultBox = vaultBoxes.data?.[Math.min(vaultBoxIndex, (vaultBoxes.data?.length ?? 1) - 1)];
+  const currentPartnerBox = partnerBoxes.data?.[Math.min(partnerBoxIndex, (partnerBoxes.data?.length ?? 1) - 1)];
+
+  // Trade-pick highlights: the picked slot only lights up while its box is visible.
+  const tradePickAId =
+    tradeMode && tradePickA && currentSaveBox && tradePickA.box === currentSaveBox.box
+      ? `save:${save.id}:${tradePickA.box}:${tradePickA.slot.slot}`
+      : null;
+  const tradePickBId =
+    tradeMode && tradePickB && currentPartnerBox && tradePickB.box === currentPartnerBox.box
+      ? `trade:${partnerId}:${tradePickB.box}:${tradePickB.slot.slot}`
+      : null;
 
   const selectedSlotId = useMemo(() => {
     if (!selected || multiMode) return null;
@@ -210,6 +241,36 @@ export function BoxBrowserPage({
     );
   }
 
+  function toggleTradeMode() {
+    setTradeMode((m) => !m);
+    setMultiMode(false);
+    clearSelection();
+    setSelected(null);
+    setTradePickA(null);
+    setTradePickB(null);
+  }
+
+  function confirmTrade() {
+    if (!tradePickA || !tradePickB) return;
+    trade.mutate(
+      {
+        saveAId: save.id,
+        boxA: tradePickA.box,
+        slotA: tradePickA.slot.slot,
+        saveBId: partnerId,
+        boxB: tradePickB.box,
+        slotB: tradePickB.slot.slot,
+      },
+      {
+        onSuccess: (report) => {
+          setTradeReport(report);
+          setTradePickA(null);
+          setTradePickB(null);
+        },
+      },
+    );
+  }
+
   function onDragStart(event: DragStartEvent) {
     setActiveSlot((event.active.data.current as BoxSlotSummary | undefined) ?? null);
   }
@@ -262,22 +323,40 @@ export function BoxBrowserPage({
         <h1 className="text-xl font-bold text-slate-100">
           {save.game} <span className="font-normal text-slate-400">· {save.trainerName}</span>
         </h1>
-        <button
-          type="button"
-          aria-pressed={multiMode}
-          onClick={() => {
-            setMultiMode((m) => !m);
-            clearSelection();
-          }}
-          className={[
-            'ml-auto rounded border px-3 py-1 text-sm',
-            multiMode
-              ? 'border-amber-500 bg-amber-900/40 text-amber-200 hover:bg-amber-800/50'
-              : 'border-slate-600 text-slate-200 hover:bg-slate-700',
-          ].join(' ')}
-        >
-          {multiMode ? 'Done selecting' : 'Select multiple'}
-        </button>
+        <div className="ml-auto flex gap-2">
+          <button
+            type="button"
+            aria-pressed={tradeMode}
+            onClick={toggleTradeMode}
+            className={[
+              'rounded border px-3 py-1 text-sm',
+              tradeMode
+                ? 'border-sky-500 bg-sky-900/40 text-sky-200 hover:bg-sky-800/50'
+                : 'border-slate-600 text-slate-200 hover:bg-slate-700',
+            ].join(' ')}
+          >
+            {tradeMode ? 'Done trading' : 'Trade'}
+          </button>
+          <button
+            type="button"
+            aria-pressed={multiMode}
+            onClick={() => {
+              setMultiMode((m) => !m);
+              setTradeMode(false);
+              setTradePickA(null);
+              setTradePickB(null);
+              clearSelection();
+            }}
+            className={[
+              'rounded border px-3 py-1 text-sm',
+              multiMode
+                ? 'border-amber-500 bg-amber-900/40 text-amber-200 hover:bg-amber-800/50'
+                : 'border-slate-600 text-slate-200 hover:bg-slate-700',
+            ].join(' ')}
+          >
+            {multiMode ? 'Done selecting' : 'Select multiple'}
+          </button>
+        </div>
       </div>
 
       {mutationError && (
@@ -300,6 +379,29 @@ export function BoxBrowserPage({
             type="button"
             aria-label="Dismiss release report"
             onClick={() => setReleaseReport(null)}
+            className="rounded px-1 text-emerald-300 hover:bg-emerald-900/60"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {tradeReport && (
+        <div
+          role="status"
+          className="mb-3 flex items-start gap-3 rounded border border-emerald-800 bg-emerald-950/60 px-3 py-2 text-sm text-emerald-200"
+        >
+          <span className="min-w-0 flex-1">
+            Traded {tradeReport.sideB.nickname} for {tradeReport.sideA.nickname}.
+            {tradeReport.sideA.evolved &&
+              ` ${tradeReport.sideA.evolvedFromName} evolved into ${tradeReport.sideA.speciesName}!`}
+            {tradeReport.sideB.evolved &&
+              ` ${tradeReport.sideB.evolvedFromName} evolved into ${tradeReport.sideB.speciesName}!`}
+          </span>
+          <button
+            type="button"
+            aria-label="Dismiss trade report"
+            onClick={() => setTradeReport(null)}
             className="rounded px-1 text-emerald-300 hover:bg-emerald-900/60"
           >
             ×
@@ -331,12 +433,16 @@ export function BoxBrowserPage({
                     slots={currentSaveBox.slots}
                     makeSlotId={(slot) => `save:${save.id}:${currentSaveBox.box}:${slot}`}
                     disabled={mutating}
-                    selectedSlotId={selectedSlotId}
+                    selectedSlotId={tradeMode ? tradePickAId : selectedSlotId}
                     selectedSlotIds={multiMode ? selectedIds : null}
                     onSelect={(slot) =>
                       multiMode
                         ? toggleSlot(`save:${save.id}:${currentSaveBox.box}:${slot.slot}`, slot)
-                        : setSelected({ side: 'save', slot, save, boxName: currentSaveBox.name })
+                        : tradeMode
+                          ? slot.isEmpty
+                            ? undefined
+                            : setTradePickA({ box: currentSaveBox.box, slot })
+                          : setSelected({ side: 'save', slot, save, boxName: currentSaveBox.name })
                     }
                   />
                 </div>
@@ -344,6 +450,61 @@ export function BoxBrowserPage({
             )}
           </section>
 
+          {tradeMode && (
+            <section
+              aria-label="Trade partner boxes"
+              className="rounded-xl border border-sky-800 bg-slate-900/40 p-4"
+            >
+              <h2 className="mb-3 text-sm font-semibold tracking-wide text-slate-300 uppercase">
+                Trade partner
+              </h2>
+              <select
+                aria-label="Trade partner save"
+                value={partnerId}
+                onChange={(e) => {
+                  setPartnerSaveId(e.target.value);
+                  setPartnerBoxIndex(0);
+                  setTradePickB(null);
+                }}
+                className="mb-3 w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+              >
+                {partnerOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.game} · {s.trainerName}
+                    {s.id === save.id ? ' (this save)' : ''}
+                  </option>
+                ))}
+              </select>
+              {partnerBoxes.isPending && <p className="text-sm text-slate-400">Loading boxes…</p>}
+              {partnerBoxes.isError && (
+                <p role="alert" className="text-sm text-red-300">
+                  Failed to load partner boxes.
+                </p>
+              )}
+              {partnerBoxes.data && currentPartnerBox && (
+                <>
+                  <BoxSwitcher
+                    boxes={partnerBoxes.data}
+                    currentIndex={partnerBoxIndex}
+                    onChange={setPartnerBoxIndex}
+                  />
+                  <div className="mt-3">
+                    <BoxGrid
+                      slots={currentPartnerBox.slots}
+                      makeSlotId={(slot) => `trade:${partnerId}:${currentPartnerBox.box}:${slot}`}
+                      disabled={mutating}
+                      selectedSlotId={tradePickBId}
+                      onSelect={(slot) =>
+                        slot.isEmpty ? undefined : setTradePickB({ box: currentPartnerBox.box, slot })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+
+          {!tradeMode && (
           <section aria-label="Vault boxes" className="rounded-xl border border-slate-700 bg-slate-900/40 p-4">
             <h2 className="mb-3 text-sm font-semibold tracking-wide text-slate-300 uppercase">Vault</h2>
             {vaultBoxes.isPending && <p className="text-sm text-slate-400">Loading boxes…</p>}
@@ -436,8 +597,53 @@ export function BoxBrowserPage({
               </>
             )}
           </section>
+          )}
 
-          <PokemonDetail selected={selected} />
+          {tradeMode ? (
+            <aside aria-label="Trade" className="rounded-xl border border-slate-700 bg-slate-900/40 p-4">
+              <h2 className="mb-3 text-sm font-semibold tracking-wide text-slate-300 uppercase">Trade</h2>
+              <div className="flex flex-col gap-3">
+                {(
+                  [
+                    { label: 'You send', pick: tradePickA },
+                    { label: 'You receive', pick: tradePickB },
+                  ] as const
+                ).map(({ label, pick }) => (
+                  <div key={label} className="flex items-center gap-3 rounded-lg border border-slate-700 p-2">
+                    {pick ? (
+                      <>
+                        <PokemonSprite species={pick.slot.species} isShiny={pick.slot.isShiny} alt={pick.slot.nickname} />
+                        <div className="min-w-0">
+                          <div className="text-xs text-slate-400">{label}</div>
+                          <div className="truncate text-sm text-slate-100">
+                            {pick.slot.nickname} <span className="text-slate-400">Lv.{pick.slot.level}</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-sm text-slate-500">
+                        {label}: pick a Pokémon in the {label === 'You send' ? 'left' : 'right'} box
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  disabled={!tradePickA || !tradePickB || mutating}
+                  onClick={confirmTrade}
+                  className="rounded border border-sky-600 bg-sky-900/40 px-3 py-1 text-sm text-sky-200 hover:bg-sky-800/50 disabled:opacity-40"
+                >
+                  Confirm trade
+                </button>
+                <p className="text-xs text-slate-500">
+                  Both saves are backed up first. Trade-evolution species evolve on receipt — held-item rules apply
+                  (e.g. Onix needs a Metal Coat). Trading with yourself works too.
+                </p>
+              </div>
+            </aside>
+          ) : (
+            <PokemonDetail selected={selected} />
+          )}
         </div>
 
         {multiMode && selectedIds.size > 0 && (
@@ -508,7 +714,8 @@ export function BoxBrowserPage({
         Drag a Pokémon from the save to the vault to deposit it (the server picks the first free slot); drag
         back to an empty save slot to withdraw; drag within the vault to reorganize. Use the search and filters
         to dim non-matching vault slots in place, or “Select multiple” to click-select Pokémon for bulk
-        deposit, move, or release.
+        deposit, move, or release. “Trade” swaps the right panel for a second save — pick one slot in each
+        panel to trade (trade-evolution species evolve on receipt, self-trades included).
       </p>
     </div>
   );

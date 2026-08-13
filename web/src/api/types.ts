@@ -199,3 +199,34 @@ export interface BulkMoveRequest {
 export interface ReleaseRequest {
   pokemonIds: string[];
 }
+
+/** One side of a completed trade: what this save received, and whether it evolved. */
+export interface TradeSlotResult {
+  saveId: string;
+  box: number;
+  slot: number;
+  species: number;
+  form: number;
+  nickname: string;
+  level: number;
+  isShiny: boolean;
+  speciesName: string;
+  evolved: boolean;
+  evolvedFromSpecies: number;
+  evolvedFromName: string | null;
+}
+
+/** Report of a completed trade: sideA is what save A received, sideB what B received. */
+export interface TradeReport {
+  sideA: TradeSlotResult;
+  sideB: TradeSlotResult;
+}
+
+export interface TradeRequest {
+  saveAId: string;
+  boxA: number;
+  slotA: number;
+  saveBId: string;
+  boxB: number;
+  slotB: number;
+}

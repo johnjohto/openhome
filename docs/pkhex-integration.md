@@ -30,6 +30,14 @@ Everything verified against **PKHeX.Core 26.7.7** (net10.0). Update this file wh
 - Custom rules: `ExternalLegalityCheck.ExternalCheckers`.
 - Custom save formats: `SaveUtil.CustomSaveReaders` (`ISaveFilePlugin`) — the M4/M5 hook.
 
+## Trade evolution
+
+- `EvolutionTree.GetEvolutionTree(sav.Context)` (public static; `SaveFile.Context` is the save's `EntityContext`) → cast to `IEvolutionNetwork`, then `.Forward.GetForward(species, form)` returns `ReadOnlyMemory<EvolutionMethod>` for that species' forward evolutions.
+- `EvolutionMethod`: `Species`, `Form`, `Argument`, `Method` (`EvolutionType`), `GetDestinationForm(currentForm)`. Trade triggers are `EvolutionType.Trade`, `TradeHeldItem` (requires `pk.HeldItem == Argument`, e.g. Metal Coat = 233), and `TradeShelmetKarrablast` (Karrablast 588 ↔ Shelmet 616 only evolve when traded for each other; `Argument` is 0).
+- Gate the result with `sav.Personal.IsPresentInGame(species, form)` — only evolve when the destination game actually contains the evolved species. `IEvolutionNetwork.Forward`/`Reverse` are explicit interface implementations, so the cast is required.
+- Applying an evolution is just `pk.Species`/`pk.Form` assignment + `pk.RefreshChecksum()`; `TradeService` does this on the receiving save after the swap.
+- `EvolutionType.IsTrade` exists as a C# 14 extension *property* (`EvolutionTypeExtensions.get_IsTrade`) — don't call it as a method.
+
 ## Pokédex data
 
 - Species names + national ceiling: `GameInfo.Strings.specieslist` — index 0 is the `"---"` placeholder, so the max valid species id is `Count() - 1` (1025 at 26.7.7). `SaveFile.MaxSpeciesID` is the save's own range (e.g. 649 for Black).

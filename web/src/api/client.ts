@@ -13,6 +13,8 @@ import type {
   StoredPokemonDetail,
   StoredPokemonQueryResult,
   StoredPokemonSummary,
+  TradeReport,
+  TradeRequest,
   VaultBoxView,
   VaultQueryParams,
   WithdrawRequest,
@@ -152,4 +154,9 @@ export function moveMany(req: BulkMoveRequest): Promise<StoredPokemonSummary[]> 
 /** POST /api/vault/release — permanent; the response reports what was released. */
 export function release(req: ReleaseRequest): Promise<StoredPokemonSummary[]> {
   return post('/api/vault/release', req);
+}
+
+/** POST /api/trades — swap two save slots; the response reports both sides after the swap. */
+export function trade(req: TradeRequest): Promise<TradeReport> {
+  return post('/api/trades', req);
 }

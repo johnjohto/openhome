@@ -17,6 +17,7 @@ openhome/
 │   │   ├── SaveFileService   # SaveUtil facade → SaveSummary
 │   │   ├── SaveLibraryService# register/copy/hash save files
 │   │   ├── VaultService      # deposit/withdraw/move, box listing
+│   │   ├── TradeService      # local trades between saves + trade evolution on receipt
 │   │   ├── BackupService     # pre-write snapshots to data/backups/
 │   │   └── Dtos.cs           # JSON DTOs — no PKHeX types cross the wire
 │   ├── OpenHome.Formats/     # (M4/M5) ISaveFilePlugin readers: hack profiles, Essentials

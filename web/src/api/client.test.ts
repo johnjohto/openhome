@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, deposit, depositMany, getNationalDex, getSaveBoxes, getSaveDex, getVaultLegality, getVaultPokemon, listSaves, listVaultBoxes, listVaultPokemon, move, moveMany, queryVaultPokemon, release, uploadSave, withdraw } from './client';
-import type { BoxView, LegalityReport, NationalDexProgress, RegisteredSaveSummary, SaveDexProgress, StoredPokemonDetail, StoredPokemonQueryResult, StoredPokemonSummary, VaultBoxView } from './types';
+import { ApiError, deposit, depositMany, getNationalDex, getSaveBoxes, getSaveDex, getVaultLegality, getVaultPokemon, listSaves, listVaultBoxes, listVaultPokemon, move, moveMany, queryVaultPokemon, release, trade, uploadSave, withdraw } from './client';
+import type { BoxView, LegalityReport, NationalDexProgress, RegisteredSaveSummary, SaveDexProgress, StoredPokemonDetail, StoredPokemonQueryResult, StoredPokemonSummary, TradeReport, VaultBoxView } from './types';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -309,6 +309,54 @@ describe('API client', () => {
 
     expect(results[0].legalityValid).toBe(false);
     expect(results[0].originGame).toBe('Black');
+  });
+
+  it('posts the trade request and maps both sides of the trade report', async () => {
+    const payload: TradeReport = {
+      sideA: {
+        saveId: 'save-a',
+        box: 0,
+        slot: 3,
+        species: 19,
+        form: 0,
+        nickname: 'Mon2',
+        level: 5,
+        isShiny: false,
+        speciesName: 'Rattata',
+        evolved: false,
+        evolvedFromSpecies: 0,
+        evolvedFromName: null,
+      },
+      sideB: {
+        saveId: 'save-b',
+        box: 0,
+        slot: 5,
+        species: 65,
+        form: 0,
+        nickname: 'Mon1',
+        level: 16,
+        isShiny: false,
+        speciesName: 'Alakazam',
+        evolved: true,
+        evolvedFromSpecies: 64,
+        evolvedFromName: 'Kadabra',
+      },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const report = await trade({ saveAId: 'save-a', boxA: 0, slotA: 3, saveBId: 'save-b', boxB: 0, slotB: 5 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/trades', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saveAId: 'save-a', boxA: 0, slotA: 3, saveBId: 'save-b', boxB: 0, slotB: 5 }),
+    });
+    expect(report.sideA.evolved).toBe(false);
+    expect(report.sideA.speciesName).toBe('Rattata');
+    expect(report.sideB.evolved).toBe(true);
+    expect(report.sideB.species).toBe(65);
+    expect(report.sideB.evolvedFromSpecies).toBe(64);
+    expect(report.sideB.evolvedFromName).toBe('Kadabra');
   });
 
   it('posts bulk deposit/move/release with JSON bodies matching the server records', async () => {
