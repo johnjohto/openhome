@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, deposit, getSaveBoxes, getVaultPokemon, listSaves, listVaultBoxes, listVaultPokemon, move, uploadSave, withdraw } from './client';
-import type { BoxView, RegisteredSaveSummary, StoredPokemonDetail, StoredPokemonSummary, VaultBoxView } from './types';
+import { ApiError, deposit, getSaveBoxes, getVaultLegality, getVaultPokemon, listSaves, listVaultBoxes, listVaultPokemon, move, uploadSave, withdraw } from './client';
+import type { BoxView, LegalityReport, RegisteredSaveSummary, StoredPokemonDetail, StoredPokemonSummary, VaultBoxView } from './types';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -55,6 +55,7 @@ describe('API client', () => {
             level: 42,
             isShiny: true,
             storedPokemonId: '3f4b9c1e-0000-4000-8000-0000000000bb',
+            legalityValid: true,
           },
         ],
       },
@@ -176,6 +177,30 @@ describe('API client', () => {
     expect(detail.evs.attack).toBe(252);
     expect(detail.moves).toHaveLength(4);
     expect(detail.moves[0].name).toBe('Thunderbolt');
+  });
+
+  it('maps GET /api/vault/pokemon/{id}/legality to a LegalityReport', async () => {
+    const payload: LegalityReport = {
+      valid: false,
+      parsed: true,
+      checks: [
+        { identifier: 'Ball', severity: 'Invalid', valid: false, message: "Invalid: Can't have ball for encounter type." },
+        { identifier: 'Level', severity: 'Valid', valid: true, message: 'Valid: Current level is not below met level.' },
+        { identifier: 'Trainer', severity: 'Fishy', valid: true, message: 'Fishy: Suspicious Original Trainer details.' },
+      ],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const report = await getVaultLegality('3f4b9c1e-0000-4000-8000-000000000001');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/vault/pokemon/3f4b9c1e-0000-4000-8000-000000000001/legality', undefined);
+    expect(report.valid).toBe(false);
+    expect(report.parsed).toBe(true);
+    expect(report.checks).toHaveLength(3);
+    expect(report.checks[0].identifier).toBe('Ball');
+    expect(report.checks[0].severity).toBe('Invalid');
+    expect(report.checks[0].valid).toBe(false);
+    expect(report.checks[0].message).toContain('ball');
   });
 
   it('throws ApiError with the server error message on failure', async () => {

@@ -13,6 +13,8 @@ export interface BoxSlotSummary {
   isShiny: boolean;
   /** Set only for vault slots (the StoredPokemon id); null for save slots. */
   storedPokemonId: string | null;
+  /** PKHeX legality verdict for occupied vault slots; null when unknown/unavailable. */
+  legalityValid: boolean | null;
 }
 
 /** A named box of a registered save file. */
@@ -80,6 +82,22 @@ export interface StoredPokemonDetail extends StoredPokemonSummary {
   ivs: StatSet;
   evs: StatSet;
   moves: MoveInfo[];
+}
+
+/** One line of a PKHeX legality report. */
+export interface LegalityCheckItem {
+  identifier: string;
+  /** "Valid" | "Fishy" | "Invalid" */
+  severity: string;
+  valid: boolean;
+  message: string;
+}
+
+/** Full legality report for a stored Pokémon. Informational only — never enforced. */
+export interface LegalityReport {
+  valid: boolean;
+  parsed: boolean;
+  checks: LegalityCheckItem[];
 }
 
 export interface CreateBoxRequest {

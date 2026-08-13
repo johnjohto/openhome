@@ -36,6 +36,7 @@ export function BoxGrid({
         level: 0,
         isShiny: false,
         storedPokemonId: null,
+        legalityValid: null,
       },
     );
   }

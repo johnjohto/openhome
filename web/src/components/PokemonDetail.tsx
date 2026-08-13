@@ -1,6 +1,6 @@
 import type { BoxSlotSummary } from '../api/types';
 import type { RegisteredSaveSummary, StoredPokemonDetail } from '../api/types';
-import { useVaultPokemonDetail } from '../api/hooks';
+import { useVaultLegality, useVaultPokemonDetail } from '../api/hooks';
 import { PokemonSprite } from './PokemonSprite';
 
 export interface SelectedSlot {
@@ -89,6 +89,64 @@ function VaultDetail({ storedPokemonId }: { storedPokemonId: string }) {
           ))}
         </dd>
       </div>
+      <LegalitySection storedPokemonId={storedPokemonId} />
+    </div>
+  );
+}
+
+/** PKHeX legality verdict with the full per-check report in an expandable section. */
+function LegalitySection({ storedPokemonId }: { storedPokemonId: string }) {
+  const { data, isLoading, isError, error } = useVaultLegality(storedPokemonId);
+
+  if (isLoading) {
+    return <p className="mt-3 text-xs text-slate-500">Running the legality analysis…</p>;
+  }
+  if (isError) {
+    return <p className="mt-3 text-xs text-rose-400">{error.message}</p>;
+  }
+  if (!data) {
+    return null;
+  }
+  const failing = data.checks.filter((c) => !c.valid);
+  return (
+    <div className="mt-3 border-t border-slate-700 pt-3">
+      <div className="flex items-center gap-2 text-sm">
+        <span
+          className={data.valid ? 'font-semibold text-emerald-400' : 'font-semibold text-rose-400'}
+          aria-label={data.valid ? 'legality: valid' : 'legality: invalid'}
+        >
+          {data.valid ? '✓ Legal' : '✗ Not legal'}
+        </span>
+        {!data.parsed && <span className="text-xs text-slate-500">(entity could not be fully parsed)</span>}
+        {data.parsed && !data.valid && (
+          <span className="text-xs text-slate-500">{failing.length} failing check{failing.length === 1 ? '' : 's'}</span>
+        )}
+      </div>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-sky-400 hover:text-sky-300">
+          View full legality report ({data.checks.length} checks)
+        </summary>
+        <ul className="mt-2 space-y-1 text-xs">
+          {data.checks.map((c, i) => (
+            <li key={`${c.identifier}-${i}`} className="flex gap-2">
+              <span
+                className={
+                  c.severity === 'Invalid'
+                    ? 'text-rose-400'
+                    : c.severity === 'Fishy'
+                      ? 'text-amber-300'
+                      : 'text-emerald-400'
+                }
+                title={c.severity}
+              >
+                {c.severity === 'Invalid' ? '✗' : c.severity === 'Fishy' ? '⚠' : '✓'}
+              </span>
+              <span className="text-slate-500">{c.identifier}</span>
+              <span className="text-slate-300">{c.message}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
     </div>
   );
 }

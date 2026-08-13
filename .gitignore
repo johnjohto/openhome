@@ -485,3 +485,4 @@ $RECYCLE.BIN/
 data/
 web/node_modules/
 web/dist/
+.scratch*/

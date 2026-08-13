@@ -1,0 +1,27 @@
+# VCS / editor
+.git/
+.gitignore
+.gitattributes
+.vs/
+.vscode/
+
+# Build outputs
+**/bin/
+**/obj/
+web/dist/
+web/node_modules/
+
+# Runtime data (never bake saves/db into the image)
+data/
+
+# Tests (not needed for the image)
+tests/
+
+# Misc
+.scratch-docker/
+docs/
+*.md
+LICENSE
+docker-compose.yml
+Dockerfile
+.dockerignore

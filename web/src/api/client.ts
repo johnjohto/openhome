@@ -2,6 +2,7 @@ import type {
   BoxView,
   CreateBoxRequest,
   DepositRequest,
+  LegalityReport,
   MoveRequest,
   RegisteredSaveSummary,
   StoredPokemonDetail,
@@ -78,6 +79,11 @@ export function listVaultPokemon(): Promise<StoredPokemonSummary[]> {
 /** GET /api/vault/pokemon/{id} — one stored Pokémon with IVs, EVs and moves. */
 export function getVaultPokemon(id: string): Promise<StoredPokemonDetail> {
   return request(`/api/vault/pokemon/${id}`);
+}
+
+/** GET /api/vault/pokemon/{id}/legality — the full PKHeX legality report. */
+export function getVaultLegality(id: string): Promise<LegalityReport> {
+  return request(`/api/vault/pokemon/${id}/legality`);
 }
 
 /** POST /api/vault/boxes */

@@ -16,6 +16,7 @@ builder.Services.AddSingleton<SaveFileService>();
 builder.Services.AddSingleton<BackupService>();
 builder.Services.AddDbContext<OpenHomeDbContext>(o => o.UseSqlite($"Data Source={options.DatabasePath}"));
 builder.Services.AddScoped<SaveLibraryService>();
+builder.Services.AddScoped<LegalityService>();
 builder.Services.AddScoped<VaultService>();
 
 var app = builder.Build();
@@ -102,6 +103,10 @@ app.MapGet("/api/vault/pokemon", (VaultService vault) => vault.ListStoredPokemon
 
 app.MapGet("/api/vault/pokemon/{id:guid}", (Guid id, VaultService vault) => HandleErrors(() => vault.GetStoredPokemonAsync(id)))
     .WithName("GetVaultPokemon");
+
+// Legality is informational only — this endpoint reports, it never gates anything.
+app.MapGet("/api/vault/pokemon/{id:guid}/legality", (Guid id, LegalityService legal) => HandleErrors(() => legal.AnalyzeStoredAsync(id)))
+    .WithName("GetVaultPokemonLegality");
 
 app.MapPost("/api/vault/boxes", (CreateBoxRequest? req, VaultService vault) => vault.CreateVaultBoxAsync(req?.Name))
     .WithName("CreateVaultBox");

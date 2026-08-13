@@ -2,7 +2,11 @@ using System.Text.Json.Serialization;
 
 namespace OpenHome.Core;
 
-/// <summary>One slot in a save-file or vault box grid. No PKHeX types cross the wire.</summary>
+/// <summary>
+/// One slot in a save-file or vault box grid. No PKHeX types cross the wire.
+/// <see cref="LegalityValid"/> is the PKHeX legality verdict for occupied vault
+/// slots (null for save slots, empty slots, or when analysis was unavailable).
+/// </summary>
 public sealed record BoxSlotSummary(
     int Box,
     int Slot,
@@ -12,7 +16,8 @@ public sealed record BoxSlotSummary(
     string Nickname,
     int Level,
     bool IsShiny,
-    Guid? StoredPokemonId);
+    Guid? StoredPokemonId,
+    bool? LegalityValid);
 
 /// <summary>A named box with its slot grid.</summary>
 public sealed record BoxView(
@@ -82,3 +87,24 @@ public sealed record RegisteredSaveSummary(
     string Sha256,
     DateTime RegisteredAt,
     DateTime LastOpenedAt);
+
+/// <summary>
+/// One line of a PKHeX legality report: the check identifier, its judgement
+/// ("Valid"/"Fishy"/"Invalid"), whether the check passed, and the localized
+/// human-readable message.
+/// </summary>
+public sealed record LegalityCheckItem(
+    string Identifier,
+    string Severity,
+    bool Valid,
+    string Message);
+
+/// <summary>
+/// Full legality report for a stored Pokémon: the overall PKHeX verdict, whether
+/// the entity could be parsed at all, and the per-check list. Informational only —
+/// legality never blocks deposit, withdraw, or move.
+/// </summary>
+public sealed record LegalityReport(
+    bool Valid,
+    bool Parsed,
+    IReadOnlyList<LegalityCheckItem> Checks);

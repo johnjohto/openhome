@@ -15,6 +15,7 @@ function slot(overrides: Partial<BoxSlotSummary>): BoxSlotSummary {
     level: 0,
     isShiny: false,
     storedPokemonId: null,
+    legalityValid: null,
     ...overrides,
   };
 }
@@ -64,5 +65,17 @@ describe('BoxGrid', () => {
     const cells = screen.getAllByTestId(/^slot-/);
     expect(cells[0]).toHaveAttribute('data-testid', 'slot-test:0');
     expect(cells[29]).toHaveAttribute('data-testid', 'slot-test:29');
+  });
+
+  it('shows a legality badge on occupied vault slots when the verdict is known', () => {
+    renderGrid([
+      slot({ slot: 0, isEmpty: false, species: 25, nickname: 'PIKA', level: 5, legalityValid: true }),
+      slot({ slot: 1, isEmpty: false, species: 133, nickname: 'EVE', level: 5, legalityValid: false }),
+      slot({ slot: 2, isEmpty: false, species: 1, nickname: 'BULBA', level: 5 }),
+    ]);
+
+    expect(screen.getByLabelText('legality: valid')).toBeInTheDocument();
+    expect(screen.getByLabelText('legality: invalid')).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/^legality:/)).toHaveLength(2);
   });
 });

@@ -8,6 +8,7 @@ export const queryKeys = {
   vaultBoxes: ['vault', 'boxes'] as const,
   vaultPokemon: ['vault', 'pokemon'] as const,
   vaultPokemonDetail: (id: string) => ['vault', 'pokemon', id] as const,
+  vaultPokemonLegality: (id: string) => ['vault', 'pokemon', id, 'legality'] as const,
 };
 
 export function useSaves() {
@@ -34,6 +35,14 @@ export function useVaultPokemonDetail(id: string | null) {
   return useQuery({
     queryKey: queryKeys.vaultPokemonDetail(id ?? 'none'),
     queryFn: () => api.getVaultPokemon(id as string),
+    enabled: id !== null,
+  });
+}
+
+export function useVaultLegality(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.vaultPokemonLegality(id ?? 'none'),
+    queryFn: () => api.getVaultLegality(id as string),
     enabled: id !== null,
   });
 }

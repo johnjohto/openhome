@@ -12,7 +12,8 @@ namespace OpenHome.Core;
 public sealed class VaultService(
     OpenHomeDbContext db,
     SaveLibraryService library,
-    BackupService backups)
+    BackupService backups,
+    LegalityService legality)
 {
     /// <summary>Loads a registered save and returns its per-box, per-slot grid.</summary>
     public async Task<IReadOnlyList<BoxView>> ListSaveBoxesAsync(Guid saveId, CancellationToken ct = default)
@@ -292,9 +293,10 @@ public sealed class VaultService(
         pk.Species == 0 ? "" : Sanitize(pk.Nickname),
         pk.Species == 0 ? 0 : pk.CurrentLevel,
         pk.Species != 0 && pk.IsShiny,
+        null,
         null);
 
-    private static VaultBoxView ToVaultBoxView(VaultBox box)
+    private VaultBoxView ToVaultBoxView(VaultBox box)
     {
         var bySlot = box.Pokemon.ToDictionary(p => p.Slot);
         var slots = new List<BoxSlotSummary>(VaultBox.SlotCount);
@@ -302,11 +304,11 @@ public sealed class VaultService(
         {
             if (bySlot.TryGetValue(slot, out var p))
             {
-                slots.Add(new BoxSlotSummary(box.Order, slot, false, p.Species, p.Form, p.Nickname, p.Level, p.IsShiny, p.Id));
+                slots.Add(new BoxSlotSummary(box.Order, slot, false, p.Species, p.Form, p.Nickname, p.Level, p.IsShiny, p.Id, legality.IsStoredDataValid(p.Data)));
             }
             else
             {
-                slots.Add(new BoxSlotSummary(box.Order, slot, true, 0, 0, "", 0, false, null));
+                slots.Add(new BoxSlotSummary(box.Order, slot, true, 0, 0, "", 0, false, null, null));
             }
         }
         return new VaultBoxView(box.Id, box.Name, box.Order, slots);

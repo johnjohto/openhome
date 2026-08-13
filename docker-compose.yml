@@ -1,0 +1,11 @@
+services:
+  openhome:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - openhome-data:/data
+    restart: unless-stopped
+
+volumes:
+  openhome-data:

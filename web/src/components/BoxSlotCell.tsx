@@ -64,6 +64,18 @@ export function BoxSlotCell({
               ★
             </span>
           )}
+          {slot.legalityValid !== null && (
+            <span
+              className={[
+                'absolute top-0.5 left-1 text-[10px] leading-none',
+                slot.legalityValid ? 'text-emerald-400' : 'text-rose-400',
+              ].join(' ')}
+              aria-label={slot.legalityValid ? 'legality: valid' : 'legality: invalid'}
+              title={slot.legalityValid ? 'Legality: valid' : 'Legality: invalid — select to view the report'}
+            >
+              {slot.legalityValid ? '✓' : '✗'}
+            </span>
+          )}
           <span className="absolute right-1 bottom-0.5 rounded bg-slate-950/80 px-1 text-[9px] text-slate-200">
             {slot.level}
           </span>

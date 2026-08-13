@@ -7,6 +7,7 @@ Open-source, self-hosted Pokémon HOME alternative built on PKHeX.Core. GPL-3.0.
 - `dotnet build` / `dotnet test` from the repo root (.NET 10)
 - Frontend: `npm run dev` / `npm test` / `npm run build` in `web/` (Vite dev server proxies `/api` → `http://localhost:5140`; run the server with the `http` launch profile). Sprites are gitignored — `npm run fetch-sprites` downloads them locally.
 - The server serves `web/dist` (with SPA fallback) when it exists; M2 smoke steps live in `docs/smoke-test.md`.
+- Docker: root `Dockerfile` (web build + server publish + runtime, data at `/data`), `docker-compose.yml`, self-host guide in `docs/self-hosting.md`. CI: `.github/workflows/ci.yml` runs dotnet build/test and web test/build on push/PR.
 
 ## Conventions
 
