@@ -12,7 +12,16 @@ export interface SelectedSlot {
 }
 
 /** Right-hand detail panel. Vault slots render the full record from GET /api/vault/pokemon/{id}. */
-export function PokemonDetail({ selected }: { selected: SelectedSlot | null }) {
+export function PokemonDetail({
+  selected,
+  onDepositItem,
+  actionPending = false,
+}: {
+  selected: SelectedSlot | null;
+  /** Deposit the selected save Pokémon's held item into the item vault. */
+  onDepositItem?: () => void;
+  actionPending?: boolean;
+}) {
   if (!selected) {
     return (
       <aside className="rounded-lg border border-slate-700 bg-slate-900/50 p-4 text-sm text-slate-400">
@@ -43,6 +52,7 @@ export function PokemonDetail({ selected }: { selected: SelectedSlot | null }) {
         <Row label="Form">{slot.form}</Row>
         <Row label="Level">{slot.level}</Row>
         <Row label="Shiny">{slot.isShiny ? 'Yes ★' : 'No'}</Row>
+        {selected.side === 'save' && <Row label="Held item">{slot.heldItem?.name ?? '—'}</Row>}
         {save && (
           <>
             <Row label="Origin save">{save.game}</Row>
@@ -50,6 +60,16 @@ export function PokemonDetail({ selected }: { selected: SelectedSlot | null }) {
           </>
         )}
       </dl>
+      {selected.side === 'save' && slot.heldItem && onDepositItem && (
+        <button
+          type="button"
+          disabled={actionPending}
+          onClick={onDepositItem}
+          className="mt-3 w-full rounded border border-amber-600 bg-amber-900/40 px-3 py-1 text-sm text-amber-200 hover:bg-amber-800/50 disabled:opacity-40"
+        >
+          Deposit {slot.heldItem.name} → item vault
+        </button>
+      )}
       {selected.side === 'vault' && slot.storedPokemonId && (
         <VaultDetail storedPokemonId={slot.storedPokemonId} />
       )}
@@ -75,6 +95,7 @@ function VaultDetail({ storedPokemonId }: { storedPokemonId: string }) {
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <Row label="OT">{data.otName}</Row>
         <Row label="Origin game">{data.originGame}</Row>
+        <Row label="Held item">{data.heldItem?.name ?? '—'}</Row>
         <Row label="HOME tracker" wide>
           <span className="font-mono text-xs">{data.homeTracker}</span>
         </Row>

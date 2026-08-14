@@ -32,11 +32,14 @@ openhome/
 - `SaveFileRecord`: Id, FilePath, Sha256, Game, TrainerName, RegisteredAt, LastOpenedAt
 - `VaultBox`: Id, Name, Order — 30 slots per box; "Vault 1" auto-created, new box auto-created when full
 - `StoredPokemon`: Id, VaultBoxId+Slot (unique), Data (serialized `PKH` bytes via `Rebuild()`), denormalized Species/Form/IsShiny/Level/Nickname/OTName/OriginGame/HomeTracker/DepositedAt
+- `VaultItem`: Id, ItemId (unique), Count; the item vault, held-item storage independent of any game. One row per item id, removed when the count reaches zero.
 
 ## Core flows
 
 - **Deposit**: load save → `GetBoxSlotAtIndex(box, slot)` → `PKH.ConvertFromPKM` → mint unique nonzero HomeTracker → `pkh.Rebuild()` bytes stored → slot cleared in save → save persisted (backup snapshot first)
 - **Withdraw**: stored PKH → target format: dedicated `ConvertToPK8/PB8/PA8/PK9/PA9/PB7` when the save's `BlankPKM` matches, else `EntityConverter.ConvertToType`; no route → `UnsupportedConversionException` (HTTP 422). This reproduces HOME's no-backwards-transfers semantics by default.
+- **Item deposit/withdraw**: take a held item off a save slot's Pokémon into the item vault (stacking counts), or give a vault item to an empty-handed Pokémon (occupied hands are refused, HTTP 400). The save slot is written back with `SetBoxSlotAtIndex`; mutating the entity returned by `GetBoxSlotAtIndex` alone does not persist.
+- **Transfer mode**: `StrictTransfers` (appsettings, `OPENHOME_STRICT_TRANSFERS` env override) gates withdraw. Strict refuses transfers the target game cannot legally receive (species absent from its Personal table, backwards-generation) with `TransferRefusedException` (HTTP 422); free mode (default) performs the withdraw and returns the same findings as warnings in the response. Full `LegalityAnalysis.Valid` is deliberately not the gate.
 - **Backups**: every save write (and import) snapshots the previous file to `data/backups/{saveId}/{timestamp}.sav`
 
 ## Design rules

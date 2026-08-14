@@ -13,7 +13,8 @@ public sealed class VaultService(
     OpenHomeDbContext db,
     SaveLibraryService library,
     BackupService backups,
-    LegalityService legality)
+    LegalityService legality,
+    OpenHomeOptions options)
 {
     /// <summary>Loads a registered save and returns its per-box, per-slot grid.</summary>
     public async Task<IReadOnlyList<BoxView>> ListSaveBoxesAsync(Guid saveId, CancellationToken ct = default)
@@ -221,7 +222,7 @@ public sealed class VaultService(
             stored.Id, stored.VaultBoxId, stored.VaultBox?.Name ?? "", stored.Slot,
             stored.Species, stored.Form, stored.IsShiny, stored.Level,
             stored.Nickname, stored.OTName, stored.OriginGame, stored.HomeTracker, stored.DepositedAt,
-            ivs, evs, moves);
+            ivs, evs, moves, ItemVaultService.ToItemInfo(pkh.HeldItem));
     }
 
     /// <summary>Maps a move ID to its English display name via PKHeX's bundled string list.</summary>
@@ -252,9 +253,12 @@ public sealed class VaultService(
     /// <summary>
     /// Converts a stored Pokémon into the target save's entity format and places it
     /// at (box, slot), removing it from the vault. The save is snapshotted before
-    /// being written.
+    /// being written. Transfer-legality checks (<see cref="LegalityService.CheckTransfer"/>)
+    /// run before the conversion: strict mode refuses the withdraw with
+    /// <see cref="TransferRefusedException"/> when any check fails; free mode performs
+    /// it and returns the warnings in the result.
     /// </summary>
-    public async Task<StoredPokemonSummary> WithdrawAsync(Guid storedPokemonId, Guid saveId, int box, int slot, CancellationToken ct = default)
+    public async Task<WithdrawResult> WithdrawAsync(Guid storedPokemonId, Guid saveId, int box, int slot, CancellationToken ct = default)
     {
         var stored = await db.StoredPokemon.Include(p => p.VaultBox).FirstOrDefaultAsync(p => p.Id == storedPokemonId, ct)
             ?? throw new KeyNotFoundException($"No stored Pokémon with id {storedPokemonId}.");
@@ -266,6 +270,11 @@ public sealed class VaultService(
             throw new InvalidOperationException($"Box {box} slot {slot} is already occupied.");
 
         var pkh = new PKH(stored.Data);
+        var warnings = legality.CheckTransfer(pkh, sav, record.Game);
+        if (options.StrictTransfers && warnings.Count > 0)
+            throw new TransferRefusedException(
+                $"Strict transfer mode refused this withdraw: {string.Join(" ", warnings)}");
+
         var converted = ConvertForSave(pkh, sav, record.Game);
 
         backups.Snapshot(record);
@@ -275,7 +284,7 @@ public sealed class VaultService(
         var summary = ToSummary(stored, stored.VaultBox?.Name ?? "");
         db.StoredPokemon.Remove(stored);
         await db.SaveChangesAsync(ct);
-        return summary;
+        return new WithdrawResult(summary, warnings);
     }
 
     /// <summary>Moves a stored Pokémon to another slot within the vault.</summary>
@@ -470,7 +479,8 @@ public sealed class VaultService(
         pk.Species == 0 ? 0 : pk.CurrentLevel,
         pk.Species != 0 && pk.IsShiny,
         null,
-        null);
+        null,
+        pk.Species == 0 ? null : ItemVaultService.ToItemInfo(pk.HeldItem));
 
     private VaultBoxView ToVaultBoxView(VaultBox box)
     {

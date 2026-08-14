@@ -1,6 +1,12 @@
 // Hand-typed mirror of src/OpenHome.Core/Dtos.cs (System.Text.Json defaults:
 // PascalCase C# members serialize as camelCase JSON).
 
+/** An item by national id plus its English display name. */
+export interface ItemInfo {
+  id: number;
+  name: string;
+}
+
 /** One slot in a save-file or vault box grid. */
 export interface BoxSlotSummary {
   box: number;
@@ -15,6 +21,8 @@ export interface BoxSlotSummary {
   storedPokemonId: string | null;
   /** PKHeX legality verdict for occupied vault slots; null when unknown/unavailable. */
   legalityValid: boolean | null;
+  /** Held item for occupied save slots; null for vault slots (the detail endpoint reports it). */
+  heldItem: ItemInfo | null;
 }
 
 /** A named box of a registered save file. */
@@ -82,6 +90,29 @@ export interface StoredPokemonDetail extends StoredPokemonSummary {
   ivs: StatSet;
   evs: StatSet;
   moves: MoveInfo[];
+  heldItem: ItemInfo | null;
+}
+
+/**
+ * Result of a vault withdraw: the Pokémon as it left the vault, plus the
+ * transfer-legality warnings raised before the move (free mode only — strict
+ * mode refuses instead with HTTP 422).
+ */
+export interface WithdrawResult {
+  pokemon: StoredPokemonSummary;
+  warnings: string[];
+}
+
+/** A stack of identical items in the item vault. */
+export interface VaultItemSummary {
+  itemId: number;
+  name: string;
+  count: number;
+}
+
+/** Runtime configuration the UI renders: the transfer mode. */
+export interface ServerConfig {
+  strictTransfers: boolean;
 }
 
 /** One row of GET /api/vault/pokemon/query: summary metadata plus the legality verdict. */
@@ -229,4 +260,17 @@ export interface TradeRequest {
   saveBId: string;
   boxB: number;
   slotB: number;
+}
+
+export interface ItemDepositRequest {
+  saveId: string;
+  box: number;
+  slot: number;
+}
+
+export interface ItemWithdrawRequest {
+  itemId: number;
+  saveId: string;
+  box: number;
+  slot: number;
 }

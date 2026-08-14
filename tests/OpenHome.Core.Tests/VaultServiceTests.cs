@@ -27,7 +27,7 @@ public class VaultServiceTests : IDisposable
         _db.Database.EnsureCreated();
         _backups = new BackupService(_options);
         _library = new SaveLibraryService(_db, new SaveFileService(), _backups, _options);
-        _vault = new VaultService(_db, _library, _backups, new LegalityService(_db));
+        _vault = new VaultService(_db, _library, _backups, new LegalityService(_db), _options);
     }
 
     public void Dispose()
@@ -102,7 +102,8 @@ public class VaultServiceTests : IDisposable
         var stored = await _vault.DepositAsync(saveA.Id, box: 0, slot: 3);
         var withdrawn = await _vault.WithdrawAsync(stored.Id, saveB.Id, box: 1, slot: 5);
 
-        Assert.Equal(stored.Id, withdrawn.Id);
+        Assert.Equal(stored.Id, withdrawn.Pokemon.Id);
+        Assert.Empty(withdrawn.Warnings);
 
         // Reload save B from disk: the Pokémon survived PKH -> PB8 conversion + save write.
         var reloaded = Reload(saveB);

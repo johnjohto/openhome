@@ -27,7 +27,7 @@ public class VaultReadTests : IDisposable
         _db.Database.EnsureCreated();
         _backups = new BackupService(_options);
         _library = new SaveLibraryService(_db, new SaveFileService(), _backups, _options);
-        _vault = new VaultService(_db, _library, _backups, new LegalityService(_db));
+        _vault = new VaultService(_db, _library, _backups, new LegalityService(_db), _options);
     }
 
     public void Dispose()

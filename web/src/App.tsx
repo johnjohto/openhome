@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useConfig } from './api/hooks';
 import type { RegisteredSaveSummary } from './api/types';
 import { BoxBrowserPage } from './pages/BoxBrowserPage';
 import { DexPage } from './pages/DexPage';
@@ -9,6 +10,7 @@ type Page = 'library' | 'dex';
 export default function App() {
   const [page, setPage] = useState<Page>('library');
   const [openSave, setOpenSave] = useState<RegisteredSaveSummary | null>(null);
+  const config = useConfig();
 
   const navLink = (target: Page, label: string) => (
     <button
@@ -37,6 +39,23 @@ export default function App() {
           {navLink('library', 'Library')}
           {navLink('dex', 'Pokédex')}
         </nav>
+        {config.data && (
+          <span
+            className={[
+              'ml-auto rounded-full border px-2 py-0.5 text-xs',
+              config.data.strictTransfers
+                ? 'border-amber-600 bg-amber-900/40 text-amber-200'
+                : 'border-slate-600 bg-slate-800 text-slate-300',
+            ].join(' ')}
+            title={
+              config.data.strictTransfers
+                ? 'Strict transfer mode: withdraws the target game cannot legally receive are refused.'
+                : 'Free transfer mode: withdraws always proceed; transfer-legality issues come back as warnings.'
+            }
+          >
+            Transfers: {config.data.strictTransfers ? 'strict' : 'free'}
+          </span>
+        )}
       </header>
       <main>
         {page === 'dex' ? (

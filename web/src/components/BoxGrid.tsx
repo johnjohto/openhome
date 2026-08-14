@@ -44,6 +44,7 @@ export function BoxGrid({
         isShiny: false,
         storedPokemonId: null,
         legalityValid: null,
+        heldItem: null,
       },
     );
   }

@@ -29,7 +29,7 @@ public class LegalityServiceTests : IDisposable
         _backups = new BackupService(_options);
         _library = new SaveLibraryService(_db, new SaveFileService(), _backups, _options);
         _legality = new LegalityService(_db);
-        _vault = new VaultService(_db, _library, _backups, _legality);
+        _vault = new VaultService(_db, _library, _backups, _legality, _options);
     }
 
     public void Dispose()

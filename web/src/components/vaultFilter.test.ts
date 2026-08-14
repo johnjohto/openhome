@@ -14,6 +14,7 @@ function slot(overrides: Partial<BoxSlotSummary>): BoxSlotSummary {
     isShiny: false,
     storedPokemonId: 'p1',
     legalityValid: true,
+    heldItem: null,
     ...overrides,
   };
 }

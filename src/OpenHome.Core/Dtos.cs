@@ -2,10 +2,15 @@ using System.Text.Json.Serialization;
 
 namespace OpenHome.Core;
 
+/// <summary>An item by national id plus its English display name.</summary>
+public sealed record ItemInfo(int Id, string Name);
+
 /// <summary>
 /// One slot in a save-file or vault box grid. No PKHeX types cross the wire.
 /// <see cref="LegalityValid"/> is the PKHeX legality verdict for occupied vault
 /// slots (null for save slots, empty slots, or when analysis was unavailable).
+/// <see cref="HeldItem"/> is populated for occupied save slots; vault slots carry
+/// null (the vault detail endpoint reports the item instead).
 /// </summary>
 public sealed record BoxSlotSummary(
     int Box,
@@ -17,7 +22,8 @@ public sealed record BoxSlotSummary(
     int Level,
     bool IsShiny,
     Guid? StoredPokemonId,
-    bool? LegalityValid);
+    bool? LegalityValid,
+    ItemInfo? HeldItem = null);
 
 /// <summary>A named box with its slot grid.</summary>
 public sealed record BoxView(
@@ -76,7 +82,27 @@ public sealed record StoredPokemonDetail(
     DateTime DepositedAt,
     [property: JsonPropertyName("ivs")] StatSet IVs,
     [property: JsonPropertyName("evs")] StatSet EVs,
-    IReadOnlyList<MoveInfo> Moves);
+    IReadOnlyList<MoveInfo> Moves,
+    ItemInfo? HeldItem = null);
+
+/// <summary>
+/// Result of a vault withdraw: the Pokémon as it left the vault, plus the
+/// transfer-legality warnings raised before the move. In strict transfer mode a
+/// withdraw with any warning is refused instead, so warnings only ever reach the
+/// client in free mode.
+/// </summary>
+public sealed record WithdrawResult(
+    StoredPokemonSummary Pokemon,
+    IReadOnlyList<string> Warnings);
+
+/// <summary>A stack of identical items in the item vault.</summary>
+public sealed record VaultItemSummary(
+    int ItemId,
+    string Name,
+    int Count);
+
+/// <summary>Runtime configuration the UI needs to render: the transfer mode.</summary>
+public sealed record ServerConfig(bool StrictTransfers);
 
 /// <summary>
 /// Filter/sort parameters for a vault query. All filters are optional and

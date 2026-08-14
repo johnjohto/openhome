@@ -13,7 +13,9 @@ import { ApiError } from '../api/client';
 import {
   useCreateVaultBox,
   useDeposit,
+  useDepositItem,
   useDepositMany,
+  useItems,
   useMove,
   useMoveMany,
   useRelease,
@@ -23,6 +25,7 @@ import {
   useVaultBoxes,
   useVaultPokemon,
   useWithdraw,
+  useWithdrawItem,
 } from '../api/hooks';
 import type { BoxSlotRef, BoxSlotSummary, RegisteredSaveSummary, StoredPokemonSummary, TradeReport } from '../api/types';
 import { BoxGrid } from '../components/BoxGrid';
@@ -75,6 +78,9 @@ export function BoxBrowserPage({
   const moveMany = useMoveMany();
   const release = useRelease();
   const trade = useTrade();
+  const items = useItems();
+  const depositItem = useDepositItem();
+  const withdrawItem = useWithdrawItem();
 
   const [saveBoxIndex, setSaveBoxIndex] = useState(0);
   const [vaultBoxIndex, setVaultBoxIndex] = useState(0);
@@ -85,6 +91,8 @@ export function BoxBrowserPage({
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
   const [releaseReport, setReleaseReport] = useState<StoredPokemonSummary[] | null>(null);
+  // Free-mode withdraws surface the transfer-legality warnings strict mode would refuse on.
+  const [withdrawWarnings, setWithdrawWarnings] = useState<string[] | null>(null);
   // Trade mode: the right panel swaps the vault for a second save; one picked slot
   // per side plus a confirm. Picking the same save as the partner is allowed —
   // self-trade evolution is a core fan request.
@@ -108,7 +116,9 @@ export function BoxBrowserPage({
     depositMany.isPending ||
     moveMany.isPending ||
     release.isPending ||
-    trade.isPending;
+    trade.isPending ||
+    depositItem.isPending ||
+    withdrawItem.isPending;
   const mutationError =
     deposit.error ??
     withdraw.error ??
@@ -117,7 +127,9 @@ export function BoxBrowserPage({
     depositMany.error ??
     moveMany.error ??
     release.error ??
-    trade.error;
+    trade.error ??
+    depositItem.error ??
+    withdrawItem.error;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -271,6 +283,21 @@ export function BoxBrowserPage({
     );
   }
 
+  // Item actions act on the selected save slot: deposit needs a held item,
+  // withdraw needs an empty-handed Pokémon.
+  const selectedSaveSlot =
+    selected?.side === 'save' && !selected.slot.isEmpty ? selected.slot : null;
+
+  function depositSelectedItem() {
+    if (!selectedSaveSlot?.heldItem) return;
+    depositItem.mutate({ saveId: save.id, box: selectedSaveSlot.box, slot: selectedSaveSlot.slot });
+  }
+
+  function withdrawItemToSelected(itemId: number) {
+    if (!selectedSaveSlot || selectedSaveSlot.heldItem) return;
+    withdrawItem.mutate({ itemId, saveId: save.id, box: selectedSaveSlot.box, slot: selectedSaveSlot.slot });
+  }
+
   function onDragStart(event: DragStartEvent) {
     setActiveSlot((event.active.data.current as BoxSlotSummary | undefined) ?? null);
   }
@@ -291,12 +318,17 @@ export function BoxBrowserPage({
       deposit.mutate({ saveId: source.saveId, box: source.box, slot: source.slot });
     } else if (source.kind === 'vault' && target.kind === 'save') {
       if (!targetSlot.isEmpty) return;
-      withdraw.mutate({
-        pokemonId: sourceSlot.storedPokemonId as string,
-        saveId: target.saveId,
-        box: target.box,
-        slot: target.slot,
-      });
+      withdraw.mutate(
+        {
+          pokemonId: sourceSlot.storedPokemonId as string,
+          saveId: target.saveId,
+          box: target.box,
+          slot: target.slot,
+        },
+        {
+          onSuccess: (result) => setWithdrawWarnings(result.warnings.length > 0 ? result.warnings : null),
+        },
+      );
     } else if (source.kind === 'vault' && target.kind === 'vault') {
       if (!targetSlot.isEmpty) return;
       move.mutate({
@@ -403,6 +435,30 @@ export function BoxBrowserPage({
             aria-label="Dismiss trade report"
             onClick={() => setTradeReport(null)}
             className="rounded px-1 text-emerald-300 hover:bg-emerald-900/60"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {withdrawWarnings && (
+        <div
+          role="status"
+          className="mb-3 flex items-start gap-3 rounded border border-amber-800 bg-amber-950/60 px-3 py-2 text-sm text-amber-200"
+        >
+          <span className="min-w-0 flex-1">
+            Withdrawn with transfer warnings:
+            <ul className="mt-1 list-inside list-disc">
+              {withdrawWarnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </span>
+          <button
+            type="button"
+            aria-label="Dismiss transfer warnings"
+            onClick={() => setWithdrawWarnings(null)}
+            className="rounded px-1 text-amber-300 hover:bg-amber-900/60"
           >
             ×
           </button>
@@ -642,9 +698,60 @@ export function BoxBrowserPage({
               </div>
             </aside>
           ) : (
-            <PokemonDetail selected={selected} />
+            <PokemonDetail
+              selected={selected}
+              onDepositItem={depositSelectedItem}
+              actionPending={mutating}
+            />
           )}
         </div>
+
+        <section aria-label="Item vault" className="mt-4 rounded-xl border border-slate-700 bg-slate-900/40 p-4">
+          <h2 className="mb-3 text-sm font-semibold tracking-wide text-slate-300 uppercase">Item vault</h2>
+          {items.isPending && <p className="text-sm text-slate-400">Loading items…</p>}
+          {items.isError && (
+            <p role="alert" className="text-sm text-red-300">
+              Failed to load the item vault.
+            </p>
+          )}
+          {items.data && items.data.length === 0 && (
+            <p className="text-sm text-slate-500">
+              Empty. Select a Pokémon in the save holding an item to deposit it here.
+            </p>
+          )}
+          {items.data && items.data.length > 0 && (
+            <ul className="flex flex-wrap gap-2">
+              {items.data.map((item) => (
+                <li
+                  key={item.itemId}
+                  className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1 text-sm"
+                >
+                  <span className="text-slate-100">{item.name}</span>
+                  <span className="text-slate-400">×{item.count}</span>
+                  <button
+                    type="button"
+                    disabled={mutating || !selectedSaveSlot || !!selectedSaveSlot.heldItem}
+                    onClick={() => withdrawItemToSelected(item.itemId)}
+                    title={
+                      selectedSaveSlot && !selectedSaveSlot.heldItem
+                        ? `Give to ${selectedSaveSlot.nickname}`
+                        : 'Select an empty-handed Pokémon in the save first'
+                    }
+                    className="rounded border border-sky-600 bg-sky-900/40 px-2 py-0.5 text-xs text-sky-200 hover:bg-sky-800/50 disabled:opacity-40"
+                  >
+                    Give to selected
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {items.data && items.data.length > 0 && (
+            <p className="mt-2 text-xs text-slate-500">
+              Select an empty-handed Pokémon in the save, then give it an item. To deposit an item, select a
+              Pokémon holding one and use the button in its details.
+            </p>
+          )}
+        </section>
 
         {multiMode && selectedIds.size > 0 && (
           <div

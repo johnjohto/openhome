@@ -9,6 +9,18 @@ Everything verified against **PKHeX.Core 26.7.7** (net10.0). Update this file wh
 - Box names: `((IBoxDetailName)sav).GetBoxName(i)` — the interface cast is required.
 - Trainer name: `sav.OT` exists on `SaveFile`; on `PKM` it's renamed **`OriginalTrainerName`** (`PKM.OT` is gone).
 
+## Items
+
+- Item names: `GameInfo.Strings.itemlist` (a `string[]` field; index by national item id, bounds-check first).
+- Held items: `pk.HeldItem` (int, 0 = none). Mutating the entity from `GetBoxSlotAtIndex` does NOT write through on formats that decrypt per slot (gen 5 at least); write back with `sav.SetBoxSlotAtIndex(pk, box, slot)` before persisting.
+
+## Transfer checks (strict/free mode)
+
+- Species presence in a game: `sav.Personal.IsPresentInGame(species, form)` (ints; e.g. Black has up to 649, BDSP lacks Victini 494 and Wyrdeer 899).
+- The generation an entity currently lives in comes from `pkh.LatestGameData`'s type (`GameDataPB7` = 7, `GameDataPK8/PB8/PA8` = 8, `GameDataPK9/PA9` = 9). `pkh.Version` is `Any` and `pkh.Format` is 0 for vault-stored PKH, so neither helps here. `PKH.ConvertFromPKM` keeps a gen-9 `Version` only when the source entity has one set; `Version = Any` drops the gen-9 side data on `Rebuild()` and latest falls back to PK8.
+- `EntityConverter.IsConvertibleToFormat(pk, gen)` answers "does a conversion route exist", NOT "is this transfer legal": a gen-9 PKH converts into PK8/PB8 fine (PKHeX grafts the core data). The no-route case still fails: PKH to PK5 returns `NoTransferRoute`.
+- `EntityConverter.ConvertToType` on a PKH that was never `Rebuild()`-serialized throws "Unrecognized format: 0" via an internal clone, so always reparse from rebuilt bytes first.
+
 ## Boxes & slots
 
 - `GetBoxSlot(offset)` is **protected**. Public API: `GetBoxSlotAtIndex(box, slot)` / `(index)` and `SetBoxSlotAtIndex(pk, box, slot)`.

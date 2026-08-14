@@ -5,6 +5,8 @@ import type {
   BulkMoveRequest,
   CreateBoxRequest,
   DepositRequest,
+  ItemDepositRequest,
+  ItemWithdrawRequest,
   MoveRequest,
   ReleaseRequest,
   TradeRequest,
@@ -20,6 +22,8 @@ export const queryKeys = {
   vaultPokemonLegality: (id: string) => ['vault', 'pokemon', id, 'legality'] as const,
   nationalDex: ['dex', 'national'] as const,
   saveDex: (saveId: string) => ['dex', 'saves', saveId] as const,
+  items: ['items'] as const,
+  config: ['config'] as const,
 };
 
 export function useSaves() {
@@ -70,7 +74,15 @@ export function useSaveDex(saveId: string | null) {
   });
 }
 
-/** Every vault mutation reshapes the vault, the open save, and both dexes. */
+export function useItems() {
+  return useQuery({ queryKey: queryKeys.items, queryFn: api.listItems });
+}
+
+export function useConfig() {
+  return useQuery({ queryKey: queryKeys.config, queryFn: api.getConfig, staleTime: Infinity });
+}
+
+/** Every vault mutation reshapes the vault, the open save, the item vault, and both dexes. */
 function useInvalidatingMutation<TReq, TRes>(fn: (req: TReq) => Promise<TRes>) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -81,6 +93,7 @@ function useInvalidatingMutation<TReq, TRes>(fn: (req: TReq) => Promise<TRes>) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.saves });
       void queryClient.invalidateQueries({ queryKey: queryKeys.nationalDex });
       void queryClient.invalidateQueries({ queryKey: ['dex', 'saves'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.items });
     },
   });
 }
@@ -119,4 +132,12 @@ export function useRelease() {
 
 export function useTrade() {
   return useInvalidatingMutation((req: TradeRequest) => api.trade(req));
+}
+
+export function useDepositItem() {
+  return useInvalidatingMutation((req: ItemDepositRequest) => api.depositItem(req));
+}
+
+export function useWithdrawItem() {
+  return useInvalidatingMutation((req: ItemWithdrawRequest) => api.withdrawItem(req));
 }

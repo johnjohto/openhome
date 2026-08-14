@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, deposit, depositMany, getNationalDex, getSaveBoxes, getSaveDex, getVaultLegality, getVaultPokemon, listSaves, listVaultBoxes, listVaultPokemon, move, moveMany, queryVaultPokemon, release, trade, uploadSave, withdraw } from './client';
-import type { BoxView, LegalityReport, NationalDexProgress, RegisteredSaveSummary, SaveDexProgress, StoredPokemonDetail, StoredPokemonQueryResult, StoredPokemonSummary, TradeReport, VaultBoxView } from './types';
+import { ApiError, deposit, depositItem, depositMany, getConfig, getNationalDex, getSaveBoxes, getSaveDex, getVaultLegality, getVaultPokemon, listItems, listSaves, listVaultBoxes, listVaultPokemon, move, moveMany, queryVaultPokemon, release, trade, uploadSave, withdraw, withdrawItem } from './client';
+import type { BoxView, LegalityReport, NationalDexProgress, RegisteredSaveSummary, SaveDexProgress, ServerConfig, StoredPokemonDetail, StoredPokemonQueryResult, StoredPokemonSummary, TradeReport, VaultBoxView, VaultItemSummary, WithdrawResult } from './types';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -56,6 +56,7 @@ describe('API client', () => {
             isShiny: true,
             storedPokemonId: '3f4b9c1e-0000-4000-8000-0000000000bb',
             legalityValid: true,
+            heldItem: { id: 233, name: 'Metal Coat' },
           },
         ],
       },
@@ -167,6 +168,7 @@ describe('API client', () => {
         { id: 98, name: 'Quick Attack' },
         { id: 0, name: '(None)' },
       ],
+      heldItem: null,
     };
     fetchMock.mockResolvedValueOnce(jsonResponse(payload));
 
@@ -381,6 +383,70 @@ describe('API client', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pokemonIds: ['p1'] }),
+    });
+  });
+
+  it('maps the withdraw result with its free-mode transfer warnings', async () => {
+    const payload: WithdrawResult = {
+      pokemon: {
+        id: '3f4b9c1e-0000-4000-8000-000000000001',
+        boxId: '3f4b9c1e-0000-4000-8000-0000000000aa',
+        boxName: 'Vault 1',
+        slot: 0,
+        species: 25,
+        form: 0,
+        isShiny: false,
+        level: 42,
+        nickname: 'Pika',
+        otName: 'TEST',
+        originGame: 'Scarlet',
+        homeTracker: 123456789,
+        depositedAt: '2026-08-01T10:00:00Z',
+      },
+      warnings: ['Pikachu lives in a generation 9 game and cannot enter Brilliant Diamond (generation 8) — transfers never go backwards.'],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const result = await withdraw({ pokemonId: 'p1', saveId: 's1', box: 0, slot: 3 });
+
+    expect(result.pokemon.nickname).toBe('Pika');
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('backwards');
+  });
+
+  it('maps GET /api/config to the server configuration', async () => {
+    const payload: ServerConfig = { strictTransfers: true };
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const config = await getConfig();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/config', undefined);
+    expect(config.strictTransfers).toBe(true);
+  });
+
+  it('maps GET /api/items and posts item deposit/withdraw bodies', async () => {
+    const payload: VaultItemSummary[] = [{ itemId: 233, name: 'Metal Coat', count: 2 }];
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const items = await listItems();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/items', undefined);
+    expect(items[0]).toEqual({ itemId: 233, name: 'Metal Coat', count: 2 });
+
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ itemId: 233, name: 'Metal Coat', count: 1 })));
+
+    await depositItem({ saveId: 's1', box: 0, slot: 3 });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/items/deposit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saveId: 's1', box: 0, slot: 3 }),
+    });
+
+    await withdrawItem({ itemId: 233, saveId: 's1', box: 0, slot: 5 });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/items/withdraw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId: 233, saveId: 's1', box: 0, slot: 5 }),
     });
   });
 });

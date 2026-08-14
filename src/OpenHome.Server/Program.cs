@@ -7,7 +7,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 var dataRoot = Environment.GetEnvironmentVariable("OPENHOME_DATA")
     ?? Path.Combine(builder.Environment.ContentRootPath, "data");
-var options = new OpenHomeOptions(dataRoot);
+// Transfer mode: appsettings "StrictTransfers", overridden by OPENHOME_STRICT_TRANSFERS
+// ("true"/"1"/"false"/"0"). Free mode is the default.
+var strictTransfers = ParseBool(Environment.GetEnvironmentVariable("OPENHOME_STRICT_TRANSFERS"))
+    ?? builder.Configuration.GetValue<bool>("StrictTransfers");
+var options = new OpenHomeOptions(dataRoot, strictTransfers);
 options.EnsureDirectories();
 
 // Custom save formats (romhack profiles, Essentials fangames) must register
@@ -22,13 +26,28 @@ builder.Services.AddDbContext<OpenHomeDbContext>(o => o.UseSqlite($"Data Source=
 builder.Services.AddScoped<SaveLibraryService>();
 builder.Services.AddScoped<LegalityService>();
 builder.Services.AddScoped<VaultService>();
+builder.Services.AddScoped<ItemVaultService>();
 builder.Services.AddScoped<DexService>();
 builder.Services.AddScoped<TradeService>();
 
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
-    scope.ServiceProvider.GetRequiredService<OpenHomeDbContext>().Database.EnsureCreated();
+{
+    var db = scope.ServiceProvider.GetRequiredService<OpenHomeDbContext>();
+    db.Database.EnsureCreated();
+    // EnsureCreated only builds a fresh database; add the item-vault table in place
+    // for databases created before it existed.
+    db.Database.ExecuteSqlRaw(
+        """
+        CREATE TABLE IF NOT EXISTS "VaultItems" (
+            "Id" TEXT NOT NULL CONSTRAINT "PK_VaultItems" PRIMARY KEY,
+            "ItemId" INTEGER NOT NULL,
+            "Count" INTEGER NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_VaultItems_ItemId" ON "VaultItems" ("ItemId");
+        """);
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -162,7 +181,29 @@ app.MapGet("/api/dex/national", (DexService dex) => dex.GetNationalDexAsync())
 app.MapGet("/api/dex/saves/{id:guid}", (Guid id, DexService dex) => HandleErrors(() => dex.GetSaveDexAsync(id)))
     .WithName("GetSaveDex");
 
+// Runtime configuration for the UI (transfer mode badge).
+app.MapGet("/api/config", (OpenHomeOptions opt) => new ServerConfig(opt.StrictTransfers))
+    .WithName("GetConfig");
+
+// Item vault: held-item storage independent of any game (official HOME cannot).
+app.MapGet("/api/items", (ItemVaultService items) => items.ListItemsAsync())
+    .WithName("ListVaultItems");
+
+app.MapPost("/api/items/deposit", (ItemDepositRequest req, ItemVaultService items) => HandleErrors(() => items.DepositItemAsync(req.SaveId, req.Box, req.Slot)))
+    .WithName("DepositItem");
+
+app.MapPost("/api/items/withdraw", (ItemWithdrawRequest req, ItemVaultService items) => HandleErrors(() => items.WithdrawItemAsync(req.ItemId, req.SaveId, req.Box, req.Slot)))
+    .WithName("WithdrawItem");
+
 app.Run();
+
+static bool? ParseBool(string? value) => value?.Trim().ToLowerInvariant() switch
+{
+    null or "" => null,
+    "true" or "1" or "yes" => true,
+    "false" or "0" or "no" => false,
+    _ => null,
+};
 
 static async Task<IResult> HandleErrors<T>(Func<Task<T>> action)
 {
@@ -175,6 +216,10 @@ static async Task<IResult> HandleErrors<T>(Func<Task<T>> action)
         return Results.NotFound(new { error = ex.Message });
     }
     catch (UnsupportedConversionException ex)
+    {
+        return Results.UnprocessableEntity(new { error = ex.Message });
+    }
+    catch (TransferRefusedException ex)
     {
         return Results.UnprocessableEntity(new { error = ex.Message });
     }
@@ -196,3 +241,5 @@ internal sealed record BulkDepositRequest(Guid SaveId, BoxSlotRef[] Slots);
 internal sealed record BulkMoveRequest(Guid[] PokemonIds, Guid BoxId);
 internal sealed record ReleaseRequest(Guid[] PokemonIds);
 internal sealed record TradeRequest(Guid SaveAId, int BoxA, int SlotA, Guid SaveBId, int BoxB, int SlotB);
+internal sealed record ItemDepositRequest(Guid SaveId, int Box, int Slot);
+internal sealed record ItemWithdrawRequest(int ItemId, Guid SaveId, int Box, int Slot);

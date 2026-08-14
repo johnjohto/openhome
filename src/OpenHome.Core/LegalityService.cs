@@ -64,6 +64,88 @@ public sealed class LegalityService(OpenHomeDbContext db)
     }
 
     /// <summary>
+    /// Transfer-legality checks for moving a stored Pokémon into a target save: the
+    /// two HOME-parity rules strict mode enforces. The species must be present in the
+    /// target game's Personal table, and an entity cannot move backwards to a
+    /// generation older than the game its side data currently lives in. The full
+    /// <see cref="LegalityAnalysis"/> verdict is deliberately NOT the gate: transferred
+    /// veterans, event Pokémon and fangame origins routinely fail checks that say
+    /// nothing about whether the target game can actually hold the entity.
+    /// </summary>
+    public IReadOnlyList<string> CheckTransfer(PKH pkh, SaveFile sav, string gameName)
+    {
+        var warnings = new List<string>();
+        var generation = CurrentGeneration(pkh);
+        if (generation > sav.Generation)
+        {
+            warnings.Add(
+                $"{SpeciesName(pkh.Species)} lives in a generation {generation} game and cannot enter " +
+                $"{gameName} (generation {sav.Generation}) — transfers never go backwards.");
+            return warnings;
+        }
+
+        var converted = TryConvertForSave(pkh, sav);
+        if (converted is null)
+        {
+            warnings.Add($"No transfer route into {gameName} ({sav.BlankPKM.GetType().Name}).");
+            return warnings;
+        }
+        if (!sav.Personal.IsPresentInGame(converted.Species, converted.Form) &&
+            !sav.Personal.IsPresentInGame(converted.Species, 0))
+        {
+            warnings.Add($"{SpeciesName(converted.Species)} is not present in {gameName}.");
+        }
+        return warnings;
+    }
+
+    /// <summary>
+    /// The generation of the game whose side data is current on the stored entity
+    /// (<c>LatestGameData</c>). Unknown newer side data is treated as the newest
+    /// generation — the conservative choice for the backwards-transfer check.
+    /// </summary>
+    private static int CurrentGeneration(PKH pkh) => pkh.LatestGameData switch
+    {
+        null => 0,
+        GameDataPB7 => 7,
+        GameDataPK8 or GameDataPB8 or GameDataPA8 => 8,
+        GameDataPK9 or GameDataPA9 => 9,
+        _ => 9,
+    };
+
+    /// <summary>
+    /// Mirrors <see cref="VaultService"/>'s withdraw conversion, returning null
+    /// instead of throwing so transfer checks can report rather than fail.
+    /// </summary>
+    private static PKM? TryConvertForSave(PKH pkh, SaveFile sav)
+    {
+        var target = sav.BlankPKM;
+        try
+        {
+            return target switch
+            {
+                PK8 => pkh.ConvertToPK8(),
+                PB8 => pkh.ConvertToPB8(),
+                PA8 => pkh.ConvertToPA8(),
+                PK9 => pkh.ConvertToPK9(),
+                PA9 => pkh.ConvertToPA9(),
+                PB7 => pkh.ConvertToPB7(),
+                _ => EntityConverter.ConvertToType(pkh, target.GetType(), out _),
+            };
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>English species name for a national dex id, bounds-checked.</summary>
+    private static string SpeciesName(int species)
+    {
+        var names = GameInfo.Strings.specieslist;
+        return species > 0 && species < names.Length ? names[species] : $"Species #{species}";
+    }
+
+    /// <summary>
     /// LegalityAnalysis has no PKH parse path (PKHeX 26.7.7 reports "Internal error"
     /// on raw PKH), so the stored container is projected back into the concrete
     /// entity format of the game whose side data is current (<c>LatestGameData</c>).

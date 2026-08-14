@@ -8,6 +8,7 @@ public sealed class OpenHomeDbContext(DbContextOptions<OpenHomeDbContext> option
     public DbSet<SaveFileRecord> SaveFiles => Set<SaveFileRecord>();
     public DbSet<VaultBox> VaultBoxes => Set<VaultBox>();
     public DbSet<StoredPokemon> StoredPokemon => Set<StoredPokemon>();
+    public DbSet<VaultItem> VaultItems => Set<VaultItem>();
 
     /// <summary>Builds a context over the database at <paramref name="databasePath"/>.</summary>
     public static OpenHomeDbContext Create(string databasePath)
@@ -30,5 +31,9 @@ public sealed class OpenHomeDbContext(DbContextOptions<OpenHomeDbContext> option
 
         modelBuilder.Entity<StoredPokemon>()
             .HasIndex(p => p.HomeTracker);
+
+        modelBuilder.Entity<VaultItem>()
+            .HasIndex(i => i.ItemId)
+            .IsUnique();
     }
 }

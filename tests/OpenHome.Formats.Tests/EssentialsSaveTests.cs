@@ -27,7 +27,7 @@ public class EssentialsSaveTests : IDisposable
         _db.Database.EnsureCreated();
         var backups = new BackupService(options);
         _library = new SaveLibraryService(_db, new SaveFileService(), backups, options);
-        _vault = new VaultService(_db, _library, backups, new LegalityService(_db));
+        _vault = new VaultService(_db, _library, backups, new LegalityService(_db), options);
         FormatsRegistration.RegisterAll();
     }
 

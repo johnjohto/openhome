@@ -4,20 +4,25 @@ import type {
   BulkMoveRequest,
   CreateBoxRequest,
   DepositRequest,
+  ItemDepositRequest,
+  ItemWithdrawRequest,
   LegalityReport,
   MoveRequest,
   NationalDexProgress,
   RegisteredSaveSummary,
   ReleaseRequest,
   SaveDexProgress,
+  ServerConfig,
   StoredPokemonDetail,
   StoredPokemonQueryResult,
   StoredPokemonSummary,
   TradeReport,
   TradeRequest,
   VaultBoxView,
+  VaultItemSummary,
   VaultQueryParams,
   WithdrawRequest,
+  WithdrawResult,
 } from './types';
 
 /** Thrown for any non-2xx API response; `status` is the HTTP status code. */
@@ -131,8 +136,8 @@ export function deposit(req: DepositRequest): Promise<StoredPokemonSummary> {
   return post('/api/vault/deposit', req);
 }
 
-/** POST /api/vault/withdraw — vault slot → save slot. */
-export function withdraw(req: WithdrawRequest): Promise<StoredPokemonSummary> {
+/** POST /api/vault/withdraw — vault slot → save slot; free mode may carry transfer warnings. */
+export function withdraw(req: WithdrawRequest): Promise<WithdrawResult> {
   return post('/api/vault/withdraw', req);
 }
 
@@ -159,4 +164,24 @@ export function release(req: ReleaseRequest): Promise<StoredPokemonSummary[]> {
 /** POST /api/trades — swap two save slots; the response reports both sides after the swap. */
 export function trade(req: TradeRequest): Promise<TradeReport> {
   return post('/api/trades', req);
+}
+
+/** GET /api/config — runtime configuration (transfer mode). */
+export function getConfig(): Promise<ServerConfig> {
+  return request('/api/config');
+}
+
+/** GET /api/items — the item vault's contents. */
+export function listItems(): Promise<VaultItemSummary[]> {
+  return request('/api/items');
+}
+
+/** POST /api/items/deposit — take the held item off a save slot's Pokémon into the vault. */
+export function depositItem(req: ItemDepositRequest): Promise<VaultItemSummary> {
+  return post('/api/items/deposit', req);
+}
+
+/** POST /api/items/withdraw — give a vault item to an empty-handed Pokémon in a save. */
+export function withdrawItem(req: ItemWithdrawRequest): Promise<VaultItemSummary> {
+  return post('/api/items/withdraw', req);
 }
